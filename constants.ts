@@ -45,6 +45,14 @@ export const DEFAULT_DUES = 20;
 
 export const DEMO_USERS = [
   {
+    id: 'admin_custom',
+    firstName: 'Mashood',
+    lastName: 'Farouk',
+    email: 'mashoodfarouk@gmail.com',
+    role: UserRole.SUPER_ADMIN,
+    password: 'password' // Note: In Login UI this just fills the field, user must register first
+  },
+  {
     id: 'admin',
     firstName: 'Super',
     lastName: 'Admin',

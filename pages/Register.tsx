@@ -46,9 +46,13 @@ const Register = () => {
       const userCredential = await auth.createUserWithEmailAndPassword(email, password);
       const uid = userCredential.user!.uid;
 
-      // 2. Determine Role (Auto-assign Admin for specific email for demo purposes)
+      // 2. Determine Role
       let role = UserRole.STUDENT;
-      if (email === 'admin@ntcwa.edu.gh') role = UserRole.SUPER_ADMIN;
+      
+      // HARDCODED ADMINS & STAFF
+      if (email === 'admin@ntcwa.edu.gh' || email === 'mashoodfarouk@gmail.com') {
+          role = UserRole.SUPER_ADMIN;
+      }
       else if (email.includes('master')) role = UserRole.HALL_MASTER;
       else if (email.includes('exec')) role = UserRole.HALL_EXECUTIVE;
 
@@ -74,7 +78,6 @@ const Register = () => {
       // We use email as doc ID in the original code, but mixing UID and Email is confusing.
       // The services/storageService.ts currently looks up by EMAIL in getUserProfile.
       // So we MUST save with Email as ID to be consistent with existing service code.
-      // Ideally we refactor to use UID, but to minimize changes:
       await setDoc(doc(db, 'users', email), newUser); 
       
       // Navigate to dashboard (AuthContext will pick up the login)
@@ -83,7 +86,7 @@ const Register = () => {
     } catch (err: any) {
       console.error(err);
       if (err.code === 'auth/email-already-in-use') {
-        setError('Email already registered.');
+        setError('Email already registered. Please go to Login.');
       } else if (err.code === 'auth/weak-password') {
         setError('Password should be at least 6 characters.');
       } else {
@@ -111,7 +114,7 @@ const Register = () => {
 
         {/* Right Side (Form) */}
         <div className="p-8 md:w-2/3">
-          <h2 className="text-xl font-bold text-gray-800 mb-6">Student Registration</h2>
+          <h2 className="text-xl font-bold text-gray-800 mb-6">Registration</h2>
           
           <form onSubmit={handleRegister} className="space-y-4">
             {error && (
@@ -148,10 +151,12 @@ const Register = () => {
               </div>
             </div>
 
+            {/* Fields below only strictly needed for Students, but kept for layout consistency. 
+                If email is admin, these will be ignored by logic above. */}
             <div className="grid grid-cols-2 gap-4">
                 <div>
                      <label className="text-xs font-semibold text-gray-500 uppercase">Index Number</label>
-                     <input required type="text" value={studentId} onChange={e => setStudentId(e.target.value)} className="w-full border p-2 rounded focus:ring-2 focus:ring-green-500 outline-none" placeholder="NTCW/..." />
+                     <input type="text" value={studentId} onChange={e => setStudentId(e.target.value)} className="w-full border p-2 rounded focus:ring-2 focus:ring-green-500 outline-none" placeholder="NTCW/..." />
                 </div>
                 <div>
                      <label className="text-xs font-semibold text-gray-500 uppercase">Program</label>
