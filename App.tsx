@@ -59,6 +59,7 @@ function App() {
                   {/* Admin Routes */}
                   <Route path="/admin/halls" element={<AdminDashboard />} /> 
                   <Route path="/admin/batches" element={<AdminDashboard />} />
+                  <Route path="/admin/students" element={<AdminDashboard />} />
                   <Route path="/admin/reports" element={<Placeholder title="Global Reports" />} />
 
                   {/* Hall Routes */}

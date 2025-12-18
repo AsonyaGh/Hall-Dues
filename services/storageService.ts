@@ -31,9 +31,9 @@ export const initializeData = async () => {
   if (!snap.exists()) {
     console.log("Seeding Database...");
     
-    // Seed Settings
+    // Seed Settings (UPDATED TO 2025/2026)
     const defaultSettings: SystemSettings = {
-      currentAcademicYear: '2023/2024',
+      currentAcademicYear: '2025/2026',
       currentSemester: 1,
       defaultDuesAmount: DEFAULT_DUES,
       isSemesterOpen: true,
@@ -50,15 +50,10 @@ export const initializeData = async () => {
       await setDoc(doc(db, BATCHES_COL, batch.id), batch);
     }
 
-    // Seed Demo Users (Note: Auth accounts must be created separately in Firebase Console or via Sign Up, 
-    // but we store profile data here for the dashboard to work)
+    // Seed Demo Users 
     for (const user of DEMO_USERS) {
-      // In a real app, we'd use the Auth UID as the doc ID. 
-      // For seeding purposes, we use the demo IDs.
-      // Important: You must manually create these users in Firebase Auth to log in, 
-      // or use the 'signup' feature if we add one.
       const { password, ...userData } = user as any; 
-      await setDoc(doc(db, USERS_COL, userData.email), userData); // Using email as ID for demo simplicity to map auth
+      await setDoc(doc(db, USERS_COL, userData.email), userData); 
     }
     console.log("Database Seeded!");
   }
@@ -82,6 +77,14 @@ export const getUserProfile = async (email: string): Promise<User | null> => {
   const snap = await getDoc(docRef);
   if (snap.exists()) return { id: snap.id, ...snap.data() } as User;
   return null;
+};
+
+export const updateUser = async (user: User) => {
+    // Determine doc ID (Using email as ID per current architecture)
+    const docRef = doc(db, USERS_COL, user.email);
+    // Remove undefined fields to prevent firestore errors if any
+    const data = JSON.parse(JSON.stringify(user));
+    await updateDoc(docRef, data);
 };
 
 // --- HALLS ---
@@ -124,12 +127,10 @@ export const getSettings = async (): Promise<SystemSettings> => {
   const docRef = doc(db, SETTINGS_COL, SETTINGS_DOC_ID);
   const snap = await getDoc(docRef);
   if (snap.exists()) return snap.data() as SystemSettings;
-  return { currentAcademicYear: '2023/2024', currentSemester: 1, defaultDuesAmount: 20, isSemesterOpen: true };
+  return { currentAcademicYear: '2025/2026', currentSemester: 1, defaultDuesAmount: 20, isSemesterOpen: true };
 };
 
 // --- ANALYTICS HELPERS ---
-// Note: In Firestore, it's better to calculate stats on the server or use aggregation queries.
-// For this scale, client-side filtering is okay.
 export const getHallStats = async (hallId: string) => {
   const [allUsers, allPayments, allComplaints, settings] = await Promise.all([
     getUsers(),

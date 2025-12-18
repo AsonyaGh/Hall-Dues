@@ -32,6 +32,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       case UserRole.SUPER_ADMIN:
         return [
           { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+          { name: 'Students', path: '/admin/students', icon: Users }, // New Students Tab
           { name: 'Halls', path: '/admin/halls', icon: Landmark },
           { name: 'Batches', path: '/admin/batches', icon: GraduationCap },
           { name: 'Reports', path: '/admin/reports', icon: FileText },
