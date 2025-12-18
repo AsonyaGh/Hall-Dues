@@ -154,6 +154,16 @@ export const createUserProfile = async (user: User) => {
   await setDoc(docRef, data, { merge: true });
 };
 
+// SECURITY: This allows admin to simulate a password reset. 
+// In a real production app, this must be a Cloud Function using admin.auth().updateUser().
+// The client SDK cannot change another user's password.
+export const adminUpdatePassword = async (userId: string, newPass: string) => {
+    console.log(`[MOCK SECURITY] Request to update password for user ${userId} to: ${newPass}`);
+    // Simulate API delay
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    return true; 
+};
+
 // --- HALLS ---
 export const getHalls = async (): Promise<Hall[]> => fetchCollection<Hall>(HALLS_COL);
 

@@ -3,11 +3,11 @@ import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { 
     getHalls, getBatches, getUsers, getPayments, saveBatch, updateUser, getSettings, 
-    createUserProfile, getPrograms, addProgram, setupNewSemester, getSemesters, getActiveSemester 
+    createUserProfile, getPrograms, addProgram, setupNewSemester, getSemesters, getActiveSemester, adminUpdatePassword 
 } from '../../services/storageService';
-import { Batch, UserRole, Hall, User, Payment, SystemSettings, AcademicProgram, Semester } from '../../types';
+import { Batch, UserRole, Hall, User, Payment, SystemSettings, AcademicProgram, Semester, Program } from '../../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Users, GraduationCap, Wallet, Building2, Plus, Loader2, Search, Edit2, Shield, ShieldAlert, UserX, CheckCircle, AlertTriangle, X, UserCog, Calendar, BookOpen, Clock } from 'lucide-react';
+import { Users, GraduationCap, Wallet, Building2, Plus, Loader2, Search, Edit2, Shield, ShieldAlert, UserX, CheckCircle, AlertTriangle, X, UserCog, Calendar, BookOpen, Clock, Lock, Key } from 'lucide-react';
 
 const AdminDashboard = () => {
   const location = useLocation();
@@ -33,6 +33,10 @@ const AdminDashboard = () => {
       firstName: '', lastName: '', email: '', studentId: '', program: 'NAC'
   });
 
+  // Password Reset State
+  const [manualPassword, setManualPassword] = useState('');
+  const [isPasswordSectionOpen, setIsPasswordSectionOpen] = useState(false);
+
   // Academic Modals
   const [showSemModal, setShowSemModal] = useState(false);
   const [newSem, setNewSem] = useState({
@@ -40,6 +44,10 @@ const AdminDashboard = () => {
   });
   const [showProgModal, setShowProgModal] = useState(false);
   const [newProg, setNewProg] = useState({ id: '', code: '', name: '', durationYears: 2 });
+  
+  // Batch Modal
+  const [showBatchModal, setShowBatchModal] = useState(false);
+  const [newBatch, setNewBatch] = useState({ name: '', program: 'NAC' });
 
   useEffect(() => {
     if (location.pathname.includes('/admin/students')) setActiveTab('students');
@@ -78,12 +86,42 @@ const AdminDashboard = () => {
     loadData();
   }, []);
 
+  // Reset password state when opening edit modal
+  useEffect(() => {
+    if (editingUser) {
+        setManualPassword('');
+        setIsPasswordSectionOpen(false);
+    }
+  }, [editingUser]);
+
   // --- Handlers ---
   const toggleBatch = async (batch: Batch) => {
     setLoading(true);
     const updatedBatch = { ...batch, isActive: !batch.isActive };
     await saveBatch(updatedBatch);
     await loadData();
+  };
+
+  const handleAddBatch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+        const batchId = newBatch.name.toLowerCase().replace(/\s+/g, '_');
+        const batchData: Batch = {
+            id: batchId,
+            name: newBatch.name,
+            program: newBatch.program,
+            isActive: true
+        };
+        await saveBatch(batchData);
+        setShowBatchModal(false);
+        setNewBatch({ name: '', program: 'NAC' });
+        await loadData();
+    } catch (err) {
+        alert("Error adding batch: " + err);
+    } finally {
+        setLoading(false);
+    }
   };
 
   const handleDismiss = async (user: User) => {
@@ -99,9 +137,22 @@ const AdminDashboard = () => {
     e.preventDefault();
     if (!editingUser) return;
     setLoading(true);
-    await updateUser(editingUser);
-    setEditingUser(null);
-    await loadData();
+    try {
+        await updateUser(editingUser);
+        
+        // Handle Password Reset
+        if (isPasswordSectionOpen && manualPassword) {
+            await adminUpdatePassword(editingUser.id, manualPassword);
+            alert(`Password updated for ${editingUser.firstName} (Note: This is a simulation, requires backend function).`);
+        }
+
+        setEditingUser(null);
+        await loadData();
+    } catch (err) {
+        alert("Error updating user: " + err);
+    } finally {
+        setLoading(false);
+    }
   };
 
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -319,6 +370,9 @@ const AdminDashboard = () => {
                       <h3 className="font-semibold text-gray-800 flex items-center gap-2">
                           <GraduationCap className="h-5 w-5 text-green-700" /> Student Batches
                       </h3>
+                       <button onClick={() => setShowBatchModal(true)} className="text-sm bg-green-600 text-white px-3 py-1.5 rounded hover:bg-green-700 flex items-center gap-1">
+                          <Plus className="h-3 w-3" /> New Batch
+                      </button>
                   </div>
                   <table className="w-full text-sm text-left">
                       <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
@@ -472,6 +526,112 @@ const AdminDashboard = () => {
         </div>
       )}
 
+      {/* --- EDIT MODAL --- */}
+      {editingUser && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+                <div className="flex justify-between items-center p-4 border-b">
+                    <h3 className="font-bold text-gray-800">Edit Profile</h3>
+                    <button onClick={() => setEditingUser(null)}><X className="h-5 w-5 text-gray-500" /></button>
+                </div>
+                <form onSubmit={saveUserEdit} className="p-4 space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-xs font-semibold text-gray-500 uppercase">First Name</label>
+                            <input type="text" value={editingUser.firstName} onChange={e => setEditingUser({...editingUser, firstName: e.target.value})} className="w-full border p-2 rounded outline-none focus:border-green-500" />
+                        </div>
+                        <div>
+                            <label className="text-xs font-semibold text-gray-500 uppercase">Last Name</label>
+                            <input type="text" value={editingUser.lastName} onChange={e => setEditingUser({...editingUser, lastName: e.target.value})} className="w-full border p-2 rounded outline-none focus:border-green-500" />
+                        </div>
+                    </div>
+                    
+                    {/* Role Editing */}
+                    <div>
+                         <label className="text-xs font-semibold text-gray-500 uppercase">Role</label>
+                         <select value={editingUser.role} onChange={e => setEditingUser({...editingUser, role: e.target.value as UserRole})} className="w-full border p-2 rounded outline-none focus:border-green-500 bg-yellow-50">
+                            <option value={UserRole.STUDENT}>Student</option>
+                            <option value={UserRole.HALL_EXECUTIVE}>Hall Executive</option>
+                            <option value={UserRole.HALL_MASTER}>Hall Master</option>
+                            <option value={UserRole.SUPER_ADMIN}>Super Admin</option>
+                         </select>
+                    </div>
+
+                    {editingUser.role !== UserRole.SUPER_ADMIN && (
+                         <div>
+                            <label className="text-xs font-semibold text-gray-500 uppercase">Hall</label>
+                            <select value={editingUser.hallId || ''} onChange={e => setEditingUser({...editingUser, hallId: e.target.value})} className="w-full border p-2 rounded outline-none focus:border-green-500">
+                                <option value="">Select Hall</option>
+                                {halls.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+                            </select>
+                        </div>
+                    )}
+
+                    {(editingUser.role === UserRole.STUDENT || editingUser.role === UserRole.HALL_EXECUTIVE) && (
+                        <>
+                            <div>
+                                <label className="text-xs font-semibold text-gray-500 uppercase">Index Number</label>
+                                <input type="text" value={editingUser.studentId || ''} onChange={e => setEditingUser({...editingUser, studentId: e.target.value})} className="w-full border p-2 rounded outline-none focus:border-green-500" />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-xs font-semibold text-gray-500 uppercase">Batch</label>
+                                    <select value={editingUser.batchId || ''} onChange={e => setEditingUser({...editingUser, batchId: e.target.value})} className="w-full border p-2 rounded outline-none focus:border-green-500">
+                                        {batches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-xs font-semibold text-gray-500 uppercase">Program</label>
+                                    <select value={editingUser.program || Program.NAC} onChange={e => setEditingUser({...editingUser, program: e.target.value as any})} className="w-full border p-2 rounded outline-none focus:border-green-500">
+                                        {Object.values(Program).map(p => <option key={p} value={p}>{p}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+                        </>
+                    )}
+                    
+                    {/* Security Section (Manual Password Reset) */}
+                     <div className="pt-2 border-t border-gray-100">
+                        <button 
+                            type="button"
+                            onClick={() => setIsPasswordSectionOpen(!isPasswordSectionOpen)}
+                            className="text-xs text-green-700 font-bold flex items-center gap-2 hover:underline uppercase tracking-wide"
+                        >
+                            <Key className="h-3 w-3" /> 
+                            {isPasswordSectionOpen ? 'Cancel Password Change' : 'Set New Password'}
+                        </button>
+                        
+                        {isPasswordSectionOpen && (
+                            <div className="mt-3 p-3 bg-red-50 rounded-lg border border-red-100 space-y-2">
+                                <label className="text-xs font-bold text-red-800 uppercase">New Password</label>
+                                <div className="flex items-center gap-2">
+                                    <input 
+                                        type="text" 
+                                        value={manualPassword}
+                                        onChange={(e) => setManualPassword(e.target.value)}
+                                        className="w-full border border-red-200 p-2 rounded text-sm focus:outline-none focus:border-red-500"
+                                        placeholder="Enter new password"
+                                    />
+                                    <Lock className="h-4 w-4 text-red-400" />
+                                </div>
+                                <p className="text-[10px] text-red-600 font-medium">
+                                    Warning: Overwriting the password will prevent the user from logging in with their old credentials.
+                                </p>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="pt-2 flex gap-3">
+                        <button type="button" onClick={() => setEditingUser(null)} className="flex-1 py-2 text-gray-600 bg-gray-100 rounded hover:bg-gray-200 font-medium">Cancel</button>
+                        <button type="submit" className="flex-1 py-2 text-white bg-green-700 rounded hover:bg-green-800 font-medium flex items-center justify-center gap-2">
+                            {loading ? <Loader2 className="h-4 w-4 animate-spin"/> : 'Save Changes'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+      )}
+
       {/* --- SEMESTER SETUP MODAL --- */}
       {showSemModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -531,6 +691,28 @@ const AdminDashboard = () => {
                           <input type="number" required value={newProg.durationYears} onChange={e => setNewProg({...newProg, durationYears: Number(e.target.value)})} className="border p-2 rounded w-full"/>
                       </div>
                       <button type="submit" disabled={loading} className="w-full bg-green-700 text-white py-2 rounded">Add Program</button>
+                  </form>
+              </div>
+          </div>
+      )}
+
+       {/* --- ADD BATCH MODAL --- */}
+       {showBatchModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
+                  <div className="flex justify-between mb-4"><h3 className="font-bold">Add New Batch</h3><button onClick={() => setShowBatchModal(false)}><X className="h-5 w-5"/></button></div>
+                  <form onSubmit={handleAddBatch} className="space-y-4">
+                      <div>
+                          <label className="text-xs font-bold text-gray-500">Batch Name</label>
+                          <input type="text" required value={newBatch.name} onChange={e => setNewBatch({...newBatch, name: e.target.value})} className="border p-2 rounded w-full" placeholder="e.g. NAC 21"/>
+                      </div>
+                      <div>
+                          <label className="text-xs font-bold text-gray-500">Program</label>
+                           <select value={newBatch.program} onChange={e => setNewBatch({...newBatch, program: e.target.value})} className="border p-2 rounded w-full">
+                                    {programs.map(p => <option key={p.code} value={p.code}>{p.code}</option>)}
+                            </select>
+                      </div>
+                      <button type="submit" disabled={loading} className="w-full bg-green-700 text-white py-2 rounded">Create Batch</button>
                   </form>
               </div>
           </div>
