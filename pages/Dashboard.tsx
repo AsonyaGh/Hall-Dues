@@ -8,7 +8,10 @@ import StudentDashboard from './student/StudentDashboard';
 const Dashboard = () => {
   const { user } = useAuth();
 
-  if (!user) return null;
+  // Safety check, though ProtectedRoute handles this.
+  if (!user) {
+      return <div className="p-4 text-center">Loading dashboard...</div>;
+  }
 
   switch (user.role) {
     case UserRole.SUPER_ADMIN:
@@ -19,7 +22,7 @@ const Dashboard = () => {
     case UserRole.STUDENT:
       return <StudentDashboard />;
     default:
-      return <div>Access Denied</div>;
+      return <div className="p-8 text-center text-red-600">Access Denied: Unknown Role</div>;
   }
 };
 
