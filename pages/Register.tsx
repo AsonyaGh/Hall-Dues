@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { GraduationCap, Lock, Mail, User as UserIcon, AlertTriangle, Loader2 } from 'lucide-react';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
 import { UserRole, Program, User } from '../types';
@@ -44,8 +43,8 @@ const Register = () => {
 
     try {
       // 1. Create Auth User
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const uid = userCredential.user.uid;
+      const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+      const uid = userCredential.user!.uid;
 
       // 2. Determine Role (Auto-assign Admin for specific email for demo purposes)
       let role = UserRole.STUDENT;

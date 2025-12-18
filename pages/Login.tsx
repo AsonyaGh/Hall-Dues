@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { GraduationCap, Lock, Mail, AlertTriangle } from 'lucide-react';
-import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../services/firebase';
 import { DEMO_USERS } from '../constants';
 
@@ -18,7 +17,7 @@ const Login = () => {
     setLoading(true);
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      await auth.signInWithEmailAndPassword(email, password);
       // AuthContext will detect change and redirect
       navigate('/dashboard');
     } catch (err: any) {
