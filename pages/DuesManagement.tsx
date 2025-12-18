@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { getUsers, getPayments, getHalls, getSettings, addPayment } from '../services/storageService';
-import { User, Payment, UserRole, Hall, SystemSettings } from '../types';
-import { Loader2, Search, Wallet, CheckCircle, XCircle, Filter, Download } from 'lucide-react';
+import { getUsers, getPayments, getHalls, getActiveSemester, addPayment } from '../services/storageService';
+import { User, Payment, UserRole, Hall, Semester } from '../types';
+import { Loader2, Search, Wallet, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
 
 const DuesManagement = () => {
   const { user } = useAuth();
@@ -12,7 +13,7 @@ const DuesManagement = () => {
   const [students, setStudents] = useState<User[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [halls, setHalls] = useState<Hall[]>([]);
-  const [settings, setSettings] = useState<SystemSettings | null>(null);
+  const [activeSemester, setActiveSemester] = useState<Semester | null>(null);
 
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -24,6 +25,7 @@ const DuesManagement = () => {
   const [payAmount, setPayAmount] = useState(20);
   const [payReceipt, setPayReceipt] = useState('');
   const [processing, setProcessing] = useState(false);
+  const [paymentError, setPaymentError] = useState('');
 
   useEffect(() => {
     loadData();
@@ -32,26 +34,25 @@ const DuesManagement = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-        const [uList, pList, hList, sList] = await Promise.all([
+        const [uList, pList, hList, activeSem] = await Promise.all([
             getUsers(),
             getPayments(),
             getHalls(),
-            getSettings()
+            getActiveSemester()
         ]);
 
         let filteredStudents = uList.filter(u => u.role === UserRole.STUDENT || u.role === UserRole.HALL_EXECUTIVE);
         
-        // If not Admin, filter by user's hall
         if (user?.role !== UserRole.SUPER_ADMIN && user?.hallId) {
             filteredStudents = filteredStudents.filter(u => u.hallId === user.hallId);
-            setSelectedHall(user.hallId); // Lock filter
+            setSelectedHall(user.hallId); 
         }
 
         setStudents(filteredStudents);
         setPayments(pList);
         setHalls(hList);
-        setSettings(sList);
-        setPayAmount(sList.defaultDuesAmount || 20);
+        setActiveSemester(activeSem);
+        setPayAmount(activeSem?.duesAmount || 20);
 
     } catch (err) {
         console.error(err);
@@ -60,14 +61,20 @@ const DuesManagement = () => {
     }
   };
 
-  const currentSemesterKey = settings ? `${settings.currentAcademicYear} - Sem ${settings.currentSemester}` : '';
+  const currentSemesterKey = activeSemester ? `${activeSemester.academicYear} - Sem ${activeSemester.semesterNumber}` : 'N/A';
 
   const isPaid = (studentId: string) => {
-      // Check payment by Student ID or Auth ID (handling legacy vs new)
+      if(!activeSemester) return false;
       return payments.some(p => 
           (p.studentId === studentId) && 
-          p.semester === currentSemesterKey
+          p.semesterId === activeSemester.id
       );
+  };
+
+  const isCollectionPeriodOpen = () => {
+      if (!activeSemester) return false;
+      const today = new Date().toISOString().split('T')[0];
+      return today >= activeSemester.startDate && today <= activeSemester.endDate;
   };
 
   const getFilteredStudents = () => {
@@ -91,24 +98,37 @@ const DuesManagement = () => {
 
   const handleRecordPayment = async (e: React.FormEvent) => {
       e.preventDefault();
+      setPaymentError('');
+
+      if (!activeSemester) {
+          setPaymentError("No active semester configuration found.");
+          return;
+      }
+
+      if (!isCollectionPeriodOpen() && user?.role !== UserRole.SUPER_ADMIN) {
+          setPaymentError("Dues collection is currently closed based on semester dates.");
+          return;
+      }
+
       if (!selectedStudent || !user) return;
       setProcessing(true);
 
       try {
           const newPayment: Payment = {
               id: '',
-              studentId: selectedStudent.studentId || selectedStudent.id, // Prefer Index Number
+              studentId: selectedStudent.studentId || selectedStudent.id, 
               studentName: `${selectedStudent.firstName} ${selectedStudent.lastName}`,
               hallId: selectedStudent.hallId || user.hallId || '',
               amount: payAmount,
-              semester: currentSemesterKey,
+              semester: currentSemesterKey, // Human readable
+              semesterId: activeSemester.id, // Reference
               receiptNumber: payReceipt,
               datePaid: new Date().toISOString(),
               recordedBy: user.id
           };
           
           await addPayment(newPayment);
-          await loadData(); // Refresh to update status
+          await loadData(); 
           setSelectedStudent(null);
           setPayReceipt('');
       } catch (err) {
@@ -125,7 +145,10 @@ const DuesManagement = () => {
       <div className="flex flex-col md:flex-row justify-between items-center gap-4">
         <div>
             <h1 className="text-2xl font-bold text-gray-800">Hall Dues Management</h1>
-            <p className="text-sm text-gray-500">Semester: <span className="font-semibold text-green-700">{currentSemesterKey}</span></p>
+            <p className="text-sm text-gray-500">
+                Active Period: <span className="font-semibold text-green-700">{currentSemesterKey}</span>
+                {!isCollectionPeriodOpen() && <span className="text-red-600 font-bold ml-2">(Closed)</span>}
+            </p>
         </div>
         
         <div className="flex gap-2 w-full md:w-auto">
@@ -139,7 +162,6 @@ const DuesManagement = () => {
                     onChange={e => setSearchTerm(e.target.value)}
                 />
             </div>
-            {/* Hall Filter (Admin Only) */}
             {user?.role === UserRole.SUPER_ADMIN && (
                 <select 
                     value={selectedHall} 
@@ -203,7 +225,12 @@ const DuesManagement = () => {
                                         {!paid && (
                                             <button 
                                                 onClick={() => setSelectedStudent(student)}
-                                                className="bg-green-700 hover:bg-green-800 text-white px-3 py-1.5 rounded text-xs font-medium flex items-center gap-2 ml-auto"
+                                                disabled={!activeSemester || (!isCollectionPeriodOpen() && user?.role !== UserRole.SUPER_ADMIN)}
+                                                className={`px-3 py-1.5 rounded text-xs font-medium flex items-center gap-2 ml-auto ${
+                                                    (!activeSemester || (!isCollectionPeriodOpen() && user?.role !== UserRole.SUPER_ADMIN)) 
+                                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                                    : 'bg-green-700 hover:bg-green-800 text-white'
+                                                }`}
                                             >
                                                 <Wallet className="h-3 w-3" /> Collect Dues
                                             </button>
@@ -229,6 +256,12 @@ const DuesManagement = () => {
                       <h3 className="text-lg font-bold text-gray-800 mb-1">Record Payment</h3>
                       <p className="text-sm text-gray-500 mb-4">Collecting dues from <span className="font-semibold text-gray-800">{selectedStudent.firstName} {selectedStudent.lastName}</span></p>
                       
+                      {paymentError && (
+                          <div className="mb-4 p-3 bg-red-50 text-red-600 text-xs rounded flex items-center gap-2">
+                              <AlertTriangle className="h-4 w-4"/> {paymentError}
+                          </div>
+                      )}
+
                       <form onSubmit={handleRecordPayment} className="space-y-4">
                           <div>
                               <label className="text-xs font-semibold text-gray-500 uppercase">Amount (GH₵)</label>
@@ -237,7 +270,9 @@ const DuesManagement = () => {
                                 value={payAmount} 
                                 onChange={e => setPayAmount(Number(e.target.value))}
                                 className="w-full border p-2 rounded focus:ring-2 focus:ring-green-500 outline-none font-bold text-lg"
+                                readOnly // Amount is determined by Admin semester config
                               />
+                              <p className="text-xs text-gray-400 mt-1">Fixed by current semester configuration</p>
                           </div>
                           <div>
                               <label className="text-xs font-semibold text-gray-500 uppercase">Receipt Number <span className="text-red-500">*</span></label>

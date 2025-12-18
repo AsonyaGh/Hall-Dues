@@ -1,3 +1,4 @@
+
 import { 
   collection, 
   getDocs, 
@@ -7,10 +8,11 @@ import {
   addDoc, 
   query, 
   where,
-  getDoc
+  getDoc,
+  writeBatch
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { User, Hall, Batch, Payment, Complaint, SystemSettings, UserRole, ComplaintStatus } from '../types';
+import { User, Hall, Batch, Payment, Complaint, SystemSettings, UserRole, ComplaintStatus, Semester, AcademicProgram } from '../types';
 import { INITIAL_HALLS, INITIAL_BATCHES, DEFAULT_DUES, DEMO_USERS } from '../constants';
 
 // Collection References
@@ -20,18 +22,28 @@ const BATCHES_COL = 'batches';
 const PAYMENTS_COL = 'payments';
 const COMPLAINTS_COL = 'complaints';
 const SETTINGS_COL = 'settings';
+const SEMESTERS_COL = 'semesters';
+const PROGRAMS_COL = 'programs';
 const SETTINGS_DOC_ID = 'global_config';
 
 // --- INITIALIZATION (SEEDING) ---
 export const initializeData = async () => {
-  // Check if we have settings. If not, assume DB is empty and seed it.
   const settingsRef = doc(db, SETTINGS_COL, SETTINGS_DOC_ID);
   const snap = await getDoc(settingsRef);
 
   if (!snap.exists()) {
     console.log("Seeding Database...");
     
-    // Seed Settings (UPDATED TO 2025/2026)
+    // 1. Programs
+    const initialPrograms: AcademicProgram[] = [
+        { id: 'NAC', code: 'NAC', name: 'Nurse Assistant Clinical', durationYears: 2 },
+        { id: 'RGN', code: 'RGN', name: 'Registered General Nursing', durationYears: 3 }
+    ];
+    for(const p of initialPrograms) {
+        await setDoc(doc(db, PROGRAMS_COL, p.id), p);
+    }
+
+    // 2. Settings (Pre-2025/2026 default)
     const defaultSettings: SystemSettings = {
       currentAcademicYear: '2025/2026',
       currentSemester: 1,
@@ -40,17 +52,17 @@ export const initializeData = async () => {
     };
     await setDoc(settingsRef, defaultSettings);
 
-    // Seed Halls
+    // 3. Halls
     for (const hall of INITIAL_HALLS) {
       await setDoc(doc(db, HALLS_COL, hall.id), hall);
     }
 
-    // Seed Batches
+    // 4. Batches
     for (const batch of INITIAL_BATCHES) {
       await setDoc(doc(db, BATCHES_COL, batch.id), batch);
     }
 
-    // Seed Demo Users 
+    // 5. Users 
     for (const user of DEMO_USERS) {
       const { password, ...userData } = user as any; 
       await setDoc(doc(db, USERS_COL, userData.email), userData); 
@@ -65,14 +77,65 @@ const fetchCollection = async <T>(colName: string): Promise<T[]> => {
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as unknown as T));
 };
 
-// --- USERS ---
-export const getUsers = async (): Promise<User[]> => {
-  return fetchCollection<User>(USERS_COL);
+// --- PROGRAMS ---
+export const getPrograms = async (): Promise<AcademicProgram[]> => fetchCollection<AcademicProgram>(PROGRAMS_COL);
+
+export const addProgram = async (program: AcademicProgram) => {
+    await setDoc(doc(db, PROGRAMS_COL, program.id), program);
 };
 
+// --- SEMESTERS ---
+export const getSemesters = async (): Promise<Semester[]> => fetchCollection<Semester>(SEMESTERS_COL);
+
+export const getActiveSemester = async (): Promise<Semester | null> => {
+    const settings = await getSettings();
+    if (settings.currentSemesterId) {
+        const snap = await getDoc(doc(db, SEMESTERS_COL, settings.currentSemesterId));
+        if (snap.exists()) return { id: snap.id, ...snap.data() } as Semester;
+    }
+    // Fallback if no ID but settings exist (legacy)
+    return null; 
+};
+
+export const setupNewSemester = async (semesterData: Omit<Semester, 'id' | 'createdAt' | 'isActive'>) => {
+    // 1. Deactivate all existing semesters
+    const allSemesters = await getSemesters();
+    const batch = writeBatch(db);
+    
+    allSemesters.forEach(sem => {
+        if(sem.isActive) {
+            batch.update(doc(db, SEMESTERS_COL, sem.id), { isActive: false });
+        }
+    });
+
+    // 2. Create new semester
+    const newSemRef = doc(collection(db, SEMESTERS_COL));
+    const newSemester: Semester = {
+        id: newSemRef.id,
+        ...semesterData,
+        isActive: true,
+        createdAt: new Date().toISOString()
+    };
+    batch.set(newSemRef, newSemester);
+
+    // 3. Update Global Settings
+    const settingsRef = doc(db, SETTINGS_COL, SETTINGS_DOC_ID);
+    batch.update(settingsRef, {
+        currentAcademicYear: semesterData.academicYear,
+        currentSemester: semesterData.semesterNumber,
+        currentSemesterId: newSemRef.id,
+        defaultDuesAmount: semesterData.duesAmount,
+        isSemesterOpen: true // Explicitly open upon creation
+    });
+
+    await batch.commit();
+    return newSemester;
+};
+
+// --- USERS ---
+export const getUsers = async (): Promise<User[]> => fetchCollection<User>(USERS_COL);
+
 export const getUserProfile = async (email: string): Promise<User | null> => {
-  // We are storing user profiles keyed by Email for this demo migration 
-  // (In production, use Auth UID)
   const docRef = doc(db, USERS_COL, email);
   const snap = await getDoc(docRef);
   if (snap.exists()) return { id: snap.id, ...snap.data() } as User;
@@ -80,16 +143,11 @@ export const getUserProfile = async (email: string): Promise<User | null> => {
 };
 
 export const updateUser = async (user: User) => {
-    // Determine doc ID (Using email as ID per current architecture)
     const docRef = doc(db, USERS_COL, user.email);
-    // Remove undefined fields to prevent firestore errors if any
     const data = JSON.parse(JSON.stringify(user));
     await updateDoc(docRef, data);
 };
 
-// Create a user profile (Admin function)
-// Note: This does not create the Auth credential (password). 
-// The actual user must "Register" with this email to claim this profile and set a password.
 export const createUserProfile = async (user: User) => {
   const docRef = doc(db, USERS_COL, user.email);
   const data = JSON.parse(JSON.stringify(user));
@@ -110,7 +168,6 @@ export const saveBatch = async (batch: Batch) => {
 export const getPayments = async (): Promise<Payment[]> => fetchCollection<Payment>(PAYMENTS_COL);
 
 export const addPayment = async (payment: Payment) => {
-  // Let Firestore generate ID
   const { id, ...data } = payment; 
   await addDoc(collection(db, PAYMENTS_COL), data);
 };

@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { UserRole } from '../types';
@@ -10,7 +11,8 @@ import {
   Settings, 
   LogOut,
   GraduationCap,
-  UserCog
+  UserCog,
+  BookOpen
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
@@ -34,23 +36,24 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         return [
           { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
           { name: 'Students', path: '/admin/students', icon: Users },
-          { name: 'Hall Masters', path: '/admin/masters', icon: UserCog }, // New
-          { name: 'Hall Dues', path: '/dues', icon: Wallet }, // Shared Dues Tab
+          { name: 'Hall Masters', path: '/admin/masters', icon: UserCog },
+          { name: 'Hall Dues', path: '/dues', icon: Wallet },
           { name: 'Halls', path: '/admin/halls', icon: Landmark },
-          { name: 'Batches', path: '/admin/batches', icon: GraduationCap },
+          { name: 'Academics', path: '/admin/academics', icon: GraduationCap }, // Merged Batches + Programs + Semesters
           { name: 'Reports', path: '/admin/reports', icon: FileText },
         ];
       case UserRole.HALL_MASTER:
         return [
           { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
           { name: 'Students', path: '/hall/students', icon: Users },
-          { name: 'Hall Dues', path: '/dues', icon: Wallet }, // Shared Dues Tab
+          { name: 'Hall Dues', path: '/dues', icon: Wallet },
+          { name: 'Programs', path: '/programs', icon: BookOpen }, // New
           { name: 'Complaints', path: '/hall/complaints', icon: FileText },
         ];
       case UserRole.HALL_EXECUTIVE:
         return [
           { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-          { name: 'Hall Dues', path: '/dues', icon: Wallet }, // Shared Dues Tab
+          { name: 'Hall Dues', path: '/dues', icon: Wallet },
           { name: 'Complaints', path: '/hall/complaints', icon: FileText },
         ];
       case UserRole.STUDENT:

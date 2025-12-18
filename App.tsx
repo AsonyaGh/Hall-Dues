@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -9,6 +10,7 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 import HallDashboard from './pages/hall/HallDashboard';
 import StudentDashboard from './pages/student/StudentDashboard';
 import DuesManagement from './pages/DuesManagement';
+import ProgramsList from './pages/ProgramsList';
 import { Loader2 } from 'lucide-react';
 
 // Placeholder components for routes not fully detailed in this snippet
@@ -59,10 +61,11 @@ function App() {
                   
                   {/* Shared Route */}
                   <Route path="/dues" element={<DuesManagement />} />
+                  <Route path="/programs" element={<ProgramsList />} />
 
                   {/* Admin Routes */}
                   <Route path="/admin/halls" element={<AdminDashboard />} /> 
-                  <Route path="/admin/batches" element={<AdminDashboard />} />
+                  <Route path="/admin/academics" element={<AdminDashboard />} />
                   <Route path="/admin/students" element={<AdminDashboard />} />
                   <Route path="/admin/masters" element={<AdminDashboard />} />
                   <Route path="/admin/reports" element={<Placeholder title="Global Reports" />} />

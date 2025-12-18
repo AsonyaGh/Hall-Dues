@@ -1,3 +1,4 @@
+
 export enum UserRole {
   SUPER_ADMIN = 'SUPER_ADMIN',
   HALL_MASTER = 'HALL_MASTER',
@@ -5,20 +6,23 @@ export enum UserRole {
   STUDENT = 'STUDENT',
 }
 
+// Keep for legacy type safety in code, but UI will use dynamic lists
 export enum Program {
-  NAC = 'NAC', // Nurse Assistant Clinical (2 years)
-  RGN = 'RGN', // Registered General Nursing (3 years)
+  NAC = 'NAC', 
+  RGN = 'RGN', 
+}
+
+export interface AcademicProgram {
+  id: string;
+  name: string; // e.g., "Registered General Nursing"
+  code: string; // e.g., "RGN"
+  durationYears: number;
 }
 
 export enum ComplaintStatus {
   PENDING = 'PENDING',
   IN_PROGRESS = 'IN_PROGRESS',
   RESOLVED = 'RESOLVED',
-}
-
-export enum SemesterStatus {
-  OPEN = 'OPEN',
-  CLOSED = 'CLOSED',
 }
 
 export interface Hall {
@@ -32,8 +36,8 @@ export interface Hall {
 export interface Batch {
   id: string;
   name: string; // e.g., "NAC 19", "RGN 12"
-  program: Program;
-  isActive: boolean; // Only active batches can register
+  program: string; // Changed from Enum to string to support dynamic programs
+  isActive: boolean; 
 }
 
 export interface User {
@@ -42,23 +46,35 @@ export interface User {
   lastName: string;
   email: string;
   role: UserRole;
-  hallId?: string; // Null for Super Admin
-  program?: Program; // For students
-  batchId?: string; // For students
-  studentId?: string; // For students (index number)
+  hallId?: string; 
+  program?: string; // string
+  batchId?: string; 
+  studentId?: string; 
   isDismissed?: boolean;
+}
+
+export interface Semester {
+  id: string;
+  academicYear: string; // "2025/2026"
+  semesterNumber: number; // 1 or 2
+  startDate: string; // ISO Date
+  endDate: string; // ISO Date
+  duesAmount: number;
+  isActive: boolean; // Only one active at a time
+  createdAt: string;
 }
 
 export interface Payment {
   id: string;
   studentId: string;
-  studentName: string; // Denormalized for easier reporting
+  studentName: string; 
   hallId: string;
-  semester: string; // e.g., "2023/2024 - Sem 1"
+  semester: string; // e.g., "2025/2026 - Sem 1"
+  semesterId?: string; // Link to specific semester config
   amount: number;
   receiptNumber: string;
   datePaid: string;
-  recordedBy: string; // User ID of executive
+  recordedBy: string; 
 }
 
 export interface Complaint {
@@ -74,10 +90,11 @@ export interface Complaint {
 }
 
 export interface SystemSettings {
-  currentAcademicYear: string;
-  currentSemester: number; // 1 or 2
-  defaultDuesAmount: number;
-  isSemesterOpen: boolean; // Controlled by Super Admin / Hall Master logic
+  currentSemesterId?: string; // Reference to the active Semester document
+  currentAcademicYear: string; // Fallback
+  currentSemester: number; // Fallback
+  defaultDuesAmount: number; // Fallback
+  isSemesterOpen: boolean; 
 }
 
 export interface DashboardStats {
