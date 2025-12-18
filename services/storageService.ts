@@ -87,6 +87,15 @@ export const updateUser = async (user: User) => {
     await updateDoc(docRef, data);
 };
 
+// Create a user profile (Admin function)
+// Note: This does not create the Auth credential (password). 
+// The actual user must "Register" with this email to claim this profile and set a password.
+export const createUserProfile = async (user: User) => {
+  const docRef = doc(db, USERS_COL, user.email);
+  const data = JSON.parse(JSON.stringify(user));
+  await setDoc(docRef, data, { merge: true });
+};
+
 // --- HALLS ---
 export const getHalls = async (): Promise<Hall[]> => fetchCollection<Hall>(HALLS_COL);
 

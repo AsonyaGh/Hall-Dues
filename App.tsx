@@ -8,6 +8,7 @@ import Layout from './components/Layout';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import HallDashboard from './pages/hall/HallDashboard';
 import StudentDashboard from './pages/student/StudentDashboard';
+import DuesManagement from './pages/DuesManagement';
 import { Loader2 } from 'lucide-react';
 
 // Placeholder components for routes not fully detailed in this snippet
@@ -56,16 +57,20 @@ function App() {
                   <Route path="/" element={<Navigate to="/dashboard" replace />} />
                   <Route path="/dashboard" element={<Dashboard />} />
                   
+                  {/* Shared Route */}
+                  <Route path="/dues" element={<DuesManagement />} />
+
                   {/* Admin Routes */}
                   <Route path="/admin/halls" element={<AdminDashboard />} /> 
                   <Route path="/admin/batches" element={<AdminDashboard />} />
                   <Route path="/admin/students" element={<AdminDashboard />} />
+                  <Route path="/admin/masters" element={<AdminDashboard />} />
                   <Route path="/admin/reports" element={<Placeholder title="Global Reports" />} />
 
                   {/* Hall Routes */}
                   <Route path="/hall/students" element={<HallDashboard />} />
-                  <Route path="/hall/payments" element={<HallDashboard />} />
-                  <Route path="/hall/payment-entry" element={<HallDashboard />} />
+                  <Route path="/hall/payments" element={<Navigate to="/dues" replace />} /> 
+                  <Route path="/hall/payment-entry" element={<Navigate to="/dues" replace />} />
                   <Route path="/hall/complaints" element={<HallDashboard />} />
 
                   {/* Student Routes */}

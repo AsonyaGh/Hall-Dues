@@ -9,7 +9,8 @@ import {
   FileText, 
   Settings, 
   LogOut,
-  GraduationCap
+  GraduationCap,
+  UserCog
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
@@ -32,7 +33,9 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       case UserRole.SUPER_ADMIN:
         return [
           { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-          { name: 'Students', path: '/admin/students', icon: Users }, // New Students Tab
+          { name: 'Students', path: '/admin/students', icon: Users },
+          { name: 'Hall Masters', path: '/admin/masters', icon: UserCog }, // New
+          { name: 'Hall Dues', path: '/dues', icon: Wallet }, // Shared Dues Tab
           { name: 'Halls', path: '/admin/halls', icon: Landmark },
           { name: 'Batches', path: '/admin/batches', icon: GraduationCap },
           { name: 'Reports', path: '/admin/reports', icon: FileText },
@@ -41,13 +44,13 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         return [
           { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
           { name: 'Students', path: '/hall/students', icon: Users },
-          { name: 'Payments', path: '/hall/payments', icon: Wallet },
+          { name: 'Hall Dues', path: '/dues', icon: Wallet }, // Shared Dues Tab
           { name: 'Complaints', path: '/hall/complaints', icon: FileText },
         ];
       case UserRole.HALL_EXECUTIVE:
         return [
           { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-          { name: 'Record Payment', path: '/hall/payment-entry', icon: Wallet },
+          { name: 'Hall Dues', path: '/dues', icon: Wallet }, // Shared Dues Tab
           { name: 'Complaints', path: '/hall/complaints', icon: FileText },
         ];
       case UserRole.STUDENT:
