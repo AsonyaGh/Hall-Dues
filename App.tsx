@@ -68,7 +68,7 @@ function App() {
                   <Route path="/admin/academics" element={<AdminDashboard />} />
                   <Route path="/admin/students" element={<AdminDashboard />} />
                   <Route path="/admin/masters" element={<AdminDashboard />} />
-                  <Route path="/admin/reports" element={<Placeholder title="Global Reports" />} />
+                  <Route path="/admin/reports" element={<AdminDashboard />} />
 
                   {/* Hall Routes */}
                   <Route path="/hall/students" element={<HallDashboard />} />

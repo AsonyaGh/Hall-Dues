@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { 
@@ -6,12 +5,12 @@ import {
     createUserProfile, getPrograms, addProgram, setupNewSemester, getSemesters, getActiveSemester, adminUpdatePassword 
 } from '../../services/storageService';
 import { Batch, UserRole, Hall, User, Payment, SystemSettings, AcademicProgram, Semester, Program } from '../../types';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Users, GraduationCap, Wallet, Building2, Plus, Loader2, Search, Edit2, Shield, ShieldAlert, UserX, CheckCircle, AlertTriangle, X, UserCog, Calendar, BookOpen, Clock, Lock, Key } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { Users, GraduationCap, Wallet, Building2, Plus, Loader2, Search, Edit2, Shield, ShieldAlert, UserX, CheckCircle, AlertTriangle, X, UserCog, Calendar, BookOpen, Clock, Lock, Key, Download, Printer, FileText } from 'lucide-react';
 
 const AdminDashboard = () => {
   const location = useLocation();
-  const [activeTab, setActiveTab] = useState<'overview' | 'academics' | 'students' | 'masters'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'academics' | 'students' | 'masters' | 'reports'>('overview');
   const [loading, setLoading] = useState(true);
   
   // Data State
@@ -37,6 +36,9 @@ const AdminDashboard = () => {
   const [manualPassword, setManualPassword] = useState('');
   const [isPasswordSectionOpen, setIsPasswordSectionOpen] = useState(false);
 
+  // Reports Filter State
+  const [reportHallFilter, setReportHallFilter] = useState('ALL');
+
   // Academic Modals
   const [showSemModal, setShowSemModal] = useState(false);
   const [newSem, setNewSem] = useState({
@@ -53,6 +55,7 @@ const AdminDashboard = () => {
     if (location.pathname.includes('/admin/students')) setActiveTab('students');
     else if (location.pathname.includes('/admin/academics') || location.pathname.includes('/admin/batches')) setActiveTab('academics');
     else if (location.pathname.includes('/admin/masters')) setActiveTab('masters');
+    else if (location.pathname.includes('/admin/reports')) setActiveTab('reports');
   }, [location]);
 
   const loadData = async () => {
@@ -237,29 +240,85 @@ const AdminDashboard = () => {
     });
   };
 
+  // --- Report Helpers ---
+  const getDefaulters = () => {
+      if(!activeSemester) return [];
+      
+      const eligibleStudents = users.filter(u => 
+          (u.role === UserRole.STUDENT || u.role === UserRole.HALL_EXECUTIVE) && 
+          !u.isDismissed &&
+          (reportHallFilter === 'ALL' || u.hallId === reportHallFilter)
+      );
+
+      const paidStudentIds = new Set(payments
+        .filter(p => p.semesterId === activeSemester.id)
+        .map(p => p.studentId)
+      );
+
+      return eligibleStudents.filter(u => !paidStudentIds.has(u.studentId || u.id));
+  };
+
+  const downloadReport = () => {
+    if(!activeSemester) {
+        alert("No active semester.");
+        return;
+    }
+    const defaulters = getDefaulters();
+    const headers = ["Index Number", "First Name", "Last Name", "Program", "Hall", "Amount Due"];
+    const rows = defaulters.map(u => [
+        u.studentId || '',
+        u.firstName,
+        u.lastName,
+        u.program || '',
+        halls.find(h => h.id === u.hallId)?.name || 'Unknown',
+        activeSemester.duesAmount.toString()
+    ]);
+
+    const csvContent = "data:text/csv;charset=utf-8," 
+        + headers.join(",") + "\n" 
+        + rows.map(e => e.join(",")).join("\n");
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `defaulters_report_${activeSemester.academicYear.replace('/','_')}_sem${activeSemester.semesterNumber}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   if (loading && !settings) return <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-green-600"/></div>;
+
+  const currentDefaulters = getDefaulters();
+  const reportStats = {
+      expectedRevenue: (users.filter(u => (u.role === UserRole.STUDENT || u.role === UserRole.HALL_EXECUTIVE) && !u.isDismissed).length) * (activeSemester?.duesAmount || 0),
+      actualRevenue: payments.filter(p => p.semesterId === activeSemester?.id).reduce((s, p) => s + p.amount, 0),
+      defaulterCount: currentDefaulters.length,
+      totalStudents: users.filter(u => (u.role === UserRole.STUDENT || u.role === UserRole.HALL_EXECUTIVE) && !u.isDismissed).length
+  };
 
   return (
     <div className="space-y-6 relative">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-800">System Administration</h1>
-        <div className="text-sm text-gray-500 bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-200">
+        <div className="text-sm text-gray-500 bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-200 hidden md:block">
           Current Semester: <span className="font-bold text-green-700">{settings?.currentAcademicYear} - Sem {settings?.currentSemester}</span>
         </div>
       </div>
 
       {/* Tabs */}
       <div className="flex gap-4 border-b border-gray-200 bg-white px-4 pt-4 rounded-t-xl overflow-x-auto">
-        <button onClick={() => setActiveTab('overview')} className={`pb-3 px-4 text-sm font-medium ${activeTab === 'overview' ? 'border-b-2 border-green-600 text-green-700' : 'text-gray-500 hover:text-green-600'}`}>Overview</button>
-        <button onClick={() => setActiveTab('students')} className={`pb-3 px-4 text-sm font-medium ${activeTab === 'students' ? 'border-b-2 border-green-600 text-green-700' : 'text-gray-500 hover:text-green-600'}`}>Students</button>
-        <button onClick={() => setActiveTab('masters')} className={`pb-3 px-4 text-sm font-medium ${activeTab === 'masters' ? 'border-b-2 border-green-600 text-green-700' : 'text-gray-500 hover:text-green-600'}`}>Hall Masters</button>
-        <button onClick={() => setActiveTab('academics')} className={`pb-3 px-4 text-sm font-medium ${activeTab === 'academics' ? 'border-b-2 border-green-600 text-green-700' : 'text-gray-500 hover:text-green-600'}`}>Academics & Settings</button>
+        <button onClick={() => setActiveTab('overview')} className={`pb-3 px-4 text-sm font-medium whitespace-nowrap ${activeTab === 'overview' ? 'border-b-2 border-green-600 text-green-700' : 'text-gray-500 hover:text-green-600'}`}>Overview</button>
+        <button onClick={() => setActiveTab('students')} className={`pb-3 px-4 text-sm font-medium whitespace-nowrap ${activeTab === 'students' ? 'border-b-2 border-green-600 text-green-700' : 'text-gray-500 hover:text-green-600'}`}>Students</button>
+        <button onClick={() => setActiveTab('masters')} className={`pb-3 px-4 text-sm font-medium whitespace-nowrap ${activeTab === 'masters' ? 'border-b-2 border-green-600 text-green-700' : 'text-gray-500 hover:text-green-600'}`}>Hall Masters</button>
+        <button onClick={() => setActiveTab('academics')} className={`pb-3 px-4 text-sm font-medium whitespace-nowrap ${activeTab === 'academics' ? 'border-b-2 border-green-600 text-green-700' : 'text-gray-500 hover:text-green-600'}`}>Academics & Settings</button>
+        <button onClick={() => setActiveTab('reports')} className={`pb-3 px-4 text-sm font-medium whitespace-nowrap ${activeTab === 'reports' ? 'border-b-2 border-green-600 text-green-700' : 'text-gray-500 hover:text-green-600'}`}>Reports</button>
       </div>
 
       {/* --- OVERVIEW TAB --- */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                      <p className="text-xs text-gray-500 uppercase font-semibold">Total Revenue</p>
                      <h3 className="text-2xl font-bold text-gray-800 mt-1">GH₵ {totalRevenue}</h3>
@@ -292,13 +351,98 @@ const AdminDashboard = () => {
         </div>
       )}
 
+      {/* --- REPORTS TAB --- */}
+      {activeTab === 'reports' && (
+          <div className="space-y-6">
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                  <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                      <FileText className="h-5 w-5 text-green-700" />
+                      Financial Report: {activeSemester?.academicYear || 'No Active Semester'}
+                  </h2>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                       <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                           <p className="text-xs font-semibold text-gray-500 uppercase">Expected Revenue</p>
+                           <p className="text-2xl font-bold text-gray-800">GH₵ {reportStats.expectedRevenue}</p>
+                           <p className="text-xs text-gray-400">Based on {reportStats.totalStudents} active students</p>
+                       </div>
+                       <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                           <p className="text-xs font-semibold text-green-600 uppercase">Actual Collected</p>
+                           <p className="text-2xl font-bold text-green-800">GH₵ {reportStats.actualRevenue}</p>
+                           <div className="w-full bg-green-200 h-1.5 rounded-full mt-2">
+                               <div className="bg-green-600 h-1.5 rounded-full" style={{ width: `${(reportStats.actualRevenue / reportStats.expectedRevenue) * 100}%` }}></div>
+                           </div>
+                       </div>
+                       <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+                           <p className="text-xs font-semibold text-red-600 uppercase">Outstanding Defaulters</p>
+                           <p className="text-2xl font-bold text-red-800">{reportStats.defaulterCount}</p>
+                           <p className="text-xs text-red-400">Students yet to pay</p>
+                       </div>
+                  </div>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                  <div className="p-4 border-b border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
+                      <div className="flex items-center gap-4">
+                          <h3 className="font-semibold text-gray-800 text-sm md:text-base">Defaulters List</h3>
+                          <select 
+                              value={reportHallFilter} 
+                              onChange={(e) => setReportHallFilter(e.target.value)}
+                              className="text-xs border border-gray-300 rounded p-1.5 outline-none focus:border-green-500"
+                          >
+                              <option value="ALL">All Halls</option>
+                              {halls.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+                          </select>
+                      </div>
+                      <button 
+                        onClick={downloadReport}
+                        className="bg-green-700 hover:bg-green-800 text-white text-xs font-bold px-4 py-2 rounded flex items-center gap-2"
+                      >
+                          <Download className="h-4 w-4" /> Download Report (CSV)
+                      </button>
+                  </div>
+                  
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                        <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
+                        <tr>
+                            <th className="px-6 py-3">Student Info</th>
+                            <th className="px-6 py-3">Program</th>
+                            <th className="px-6 py-3">Hall</th>
+                            <th className="px-6 py-3 text-right">Amount Due</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {currentDefaulters.slice(0, 50).map((student) => (
+                            <tr key={student.email} className="border-b border-gray-50 hover:bg-gray-50">
+                                <td className="px-6 py-4">
+                                    <div className="font-medium text-gray-900">{student.firstName} {student.lastName}</div>
+                                    <div className="text-xs text-gray-500">{student.studentId}</div>
+                                </td>
+                                <td className="px-6 py-4">{student.program}</td>
+                                <td className="px-6 py-4">{halls.find(h => h.id === student.hallId)?.name || 'Unassigned'}</td>
+                                <td className="px-6 py-4 text-right font-medium text-red-600">GH₵ {activeSemester?.duesAmount}</td>
+                            </tr>
+                        ))}
+                        {currentDefaulters.length === 0 && (
+                            <tr><td colSpan={4} className="p-8 text-center text-gray-500">No defaulters found for this semester! Great job.</td></tr>
+                        )}
+                        {currentDefaulters.length > 50 && (
+                            <tr><td colSpan={4} className="p-4 text-center text-gray-400 text-xs">Showing first 50 of {currentDefaulters.length} records. Download CSV for full list.</td></tr>
+                        )}
+                        </tbody>
+                    </table>
+                  </div>
+              </div>
+          </div>
+      )}
+
       {/* --- ACADEMICS TAB (SEMESTERS, PROGRAMS, BATCHES) --- */}
       {activeTab === 'academics' && (
           <div className="space-y-6">
               
               {/* 1. SEMESTER SETUP */}
               <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                  <div className="flex justify-between items-start mb-6">
+                  <div className="flex flex-col md:flex-row justify-between items-start mb-6 gap-4">
                       <div>
                           <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
                               <Calendar className="h-5 w-5 text-green-700" />
@@ -306,7 +450,7 @@ const AdminDashboard = () => {
                           </h3>
                           <p className="text-sm text-gray-500">Manage the active academic period and dues.</p>
                       </div>
-                      <button onClick={() => setShowSemModal(true)} className="bg-green-700 hover:bg-green-800 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                      <button onClick={() => setShowSemModal(true)} className="bg-green-700 hover:bg-green-800 text-white px-4 py-2 rounded-lg text-sm font-medium w-full md:w-auto">
                           Setup New Semester
                       </button>
                   </div>
@@ -344,24 +488,26 @@ const AdminDashboard = () => {
                           <Plus className="h-3 w-3" /> Add Program
                       </button>
                   </div>
-                  <table className="w-full text-sm text-left">
-                      <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
-                          <tr>
-                              <th className="px-6 py-3">Code</th>
-                              <th className="px-6 py-3">Program Name</th>
-                              <th className="px-6 py-3">Duration (Years)</th>
-                          </tr>
-                      </thead>
-                      <tbody>
-                          {programs.map(prog => (
-                              <tr key={prog.id} className="border-b border-gray-50">
-                                  <td className="px-6 py-3 font-medium">{prog.code}</td>
-                                  <td className="px-6 py-3">{prog.name}</td>
-                                  <td className="px-6 py-3">{prog.durationYears} Years</td>
-                              </tr>
-                          ))}
-                      </tbody>
-                  </table>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                        <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
+                            <tr>
+                                <th className="px-6 py-3">Code</th>
+                                <th className="px-6 py-3">Program Name</th>
+                                <th className="px-6 py-3">Duration (Years)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {programs.map(prog => (
+                                <tr key={prog.id} className="border-b border-gray-50">
+                                    <td className="px-6 py-3 font-medium">{prog.code}</td>
+                                    <td className="px-6 py-3">{prog.name}</td>
+                                    <td className="px-6 py-3">{prog.durationYears} Years</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                  </div>
               </div>
 
               {/* 3. BATCHES */}
@@ -374,34 +520,36 @@ const AdminDashboard = () => {
                           <Plus className="h-3 w-3" /> New Batch
                       </button>
                   </div>
-                  <table className="w-full text-sm text-left">
-                      <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
-                          <tr>
-                              <th className="px-6 py-3">Batch Name</th>
-                              <th className="px-6 py-3">Program</th>
-                              <th className="px-6 py-3">Status</th>
-                              <th className="px-6 py-3 text-right">Action</th>
-                          </tr>
-                      </thead>
-                      <tbody>
-                          {batches.map((batch) => (
-                              <tr key={batch.id} className="border-b border-gray-50">
-                                  <td className="px-6 py-3 font-medium">{batch.name}</td>
-                                  <td className="px-6 py-3">{batch.program}</td>
-                                  <td className="px-6 py-3">
-                                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${batch.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
-                                          {batch.isActive ? 'Active' : 'Archived'}
-                                      </span>
-                                  </td>
-                                  <td className="px-6 py-3 text-right">
-                                      <button onClick={() => toggleBatch(batch)} className={`text-xs font-medium px-3 py-1 rounded border ${batch.isActive ? 'border-red-200 text-red-600 hover:bg-red-50' : 'border-green-200 text-green-600 hover:bg-green-50'}`}>
-                                          {batch.isActive ? 'Deactivate' : 'Activate'}
-                                      </button>
-                                  </td>
-                              </tr>
-                          ))}
-                      </tbody>
-                  </table>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                        <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
+                            <tr>
+                                <th className="px-6 py-3">Batch Name</th>
+                                <th className="px-6 py-3">Program</th>
+                                <th className="px-6 py-3">Status</th>
+                                <th className="px-6 py-3 text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {batches.map((batch) => (
+                                <tr key={batch.id} className="border-b border-gray-50">
+                                    <td className="px-6 py-3 font-medium">{batch.name}</td>
+                                    <td className="px-6 py-3">{batch.program}</td>
+                                    <td className="px-6 py-3">
+                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${batch.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                                            {batch.isActive ? 'Active' : 'Archived'}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-3 text-right">
+                                        <button onClick={() => toggleBatch(batch)} className={`text-xs font-medium px-3 py-1 rounded border ${batch.isActive ? 'border-red-200 text-red-600 hover:bg-red-50' : 'border-green-200 text-green-600 hover:bg-green-50'}`}>
+                                            {batch.isActive ? 'Deactivate' : 'Activate'}
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                  </div>
               </div>
           </div>
       )}
@@ -412,7 +560,7 @@ const AdminDashboard = () => {
               <div className="p-4 border-b border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
                   <div className="flex items-center gap-4">
                       <h3 className="font-semibold text-gray-800">Student Directory</h3>
-                      <button onClick={() => { setCreateType('STUDENT'); setShowCreateUser(true); }} className="bg-green-700 hover:bg-green-800 text-white text-xs font-bold px-3 py-1.5 rounded flex items-center gap-1">
+                      <button onClick={() => { setCreateType('STUDENT'); setShowCreateUser(true); }} className="bg-green-700 hover:bg-green-800 text-white text-xs font-bold px-3 py-1.5 rounded flex items-center gap-1 whitespace-nowrap">
                           <Plus className="h-3 w-3" /> New Student
                       </button>
                   </div>
@@ -468,7 +616,7 @@ const AdminDashboard = () => {
                <div className="p-4 border-b border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
                   <div className="flex items-center gap-4">
                       <h3 className="font-semibold text-gray-800">Hall Masters</h3>
-                      <button onClick={() => { setCreateType('MASTER'); setShowCreateUser(true); }} className="bg-green-700 hover:bg-green-800 text-white text-xs font-bold px-3 py-1.5 rounded flex items-center gap-1"><Plus className="h-3 w-3" /> New Master</button>
+                      <button onClick={() => { setCreateType('MASTER'); setShowCreateUser(true); }} className="bg-green-700 hover:bg-green-800 text-white text-xs font-bold px-3 py-1.5 rounded flex items-center gap-1 whitespace-nowrap"><Plus className="h-3 w-3" /> New Master</button>
                   </div>
               </div>
               <div className="overflow-x-auto">
@@ -494,7 +642,7 @@ const AdminDashboard = () => {
       {/* --- CREATE USER MODAL --- */}
       {showCreateUser && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-             <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+             <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
                 <div className="flex justify-between mb-4"><h3 className="font-bold">Create User</h3><button onClick={() => setShowCreateUser(false)}><X className="h-5 w-5"/></button></div>
                 <form onSubmit={handleCreateUser} className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
@@ -529,7 +677,7 @@ const AdminDashboard = () => {
       {/* --- EDIT MODAL --- */}
       {editingUser && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
                 <div className="flex justify-between items-center p-4 border-b">
                     <h3 className="font-bold text-gray-800">Edit Profile</h3>
                     <button onClick={() => setEditingUser(null)}><X className="h-5 w-5 text-gray-500" /></button>
