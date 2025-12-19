@@ -14,7 +14,8 @@ import {
   UserCog,
   BookOpen,
   Menu,
-  X
+  X,
+  Megaphone
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
@@ -44,7 +45,8 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           { name: 'Hall Masters', path: '/admin/masters', icon: UserCog },
           { name: 'Hall Dues', path: '/dues', icon: Wallet },
           { name: 'Halls', path: '/admin/halls', icon: Landmark },
-          { name: 'Academics', path: '/admin/academics', icon: GraduationCap }, 
+          { name: 'Academics', path: '/admin/academics', icon: GraduationCap },
+          { name: 'Announcements', path: '/announcements', icon: Megaphone },
           { name: 'Reports', path: '/admin/reports', icon: FileText },
         ];
       case UserRole.HALL_MASTER:
@@ -53,17 +55,20 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           { name: 'Students', path: '/hall/students', icon: Users },
           { name: 'Hall Dues', path: '/dues', icon: Wallet },
           { name: 'Programs', path: '/programs', icon: BookOpen }, 
+          { name: 'Announcements', path: '/announcements', icon: Megaphone },
           { name: 'Complaints', path: '/hall/complaints', icon: FileText },
         ];
       case UserRole.HALL_EXECUTIVE:
         return [
           { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
           { name: 'Hall Dues', path: '/dues', icon: Wallet },
+          { name: 'Announcements', path: '/announcements', icon: Megaphone },
           { name: 'Complaints', path: '/hall/complaints', icon: FileText },
         ];
       case UserRole.STUDENT:
         return [
           { name: 'My Dashboard', path: '/dashboard', icon: LayoutDashboard },
+          { name: 'Announcements', path: '/announcements', icon: Megaphone },
           { name: 'My History', path: '/student/history', icon: FileText },
         ];
       default:

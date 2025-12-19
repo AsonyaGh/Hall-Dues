@@ -13,7 +13,7 @@ import {
 import { initializeApp, deleteApp } from 'firebase/app';
 import * as firebaseAuth from 'firebase/auth';
 import { db, auth, firebaseConfig } from './firebase';
-import { User, Hall, Batch, Payment, Complaint, SystemSettings, UserRole, ComplaintStatus, Semester, AcademicProgram } from '../types';
+import { User, Hall, Batch, Payment, Complaint, SystemSettings, UserRole, ComplaintStatus, Semester, AcademicProgram, Announcement } from '../types';
 import { INITIAL_HALLS, INITIAL_BATCHES, DEFAULT_DUES, DEMO_USERS } from '../constants';
 
 const { getAuth, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail } = firebaseAuth as any;
@@ -24,6 +24,7 @@ const HALLS_COL = 'halls';
 const BATCHES_COL = 'batches';
 const PAYMENTS_COL = 'payments';
 const COMPLAINTS_COL = 'complaints';
+const ANNOUNCEMENTS_COL = 'announcements';
 const SETTINGS_COL = 'settings';
 const SEMESTERS_COL = 'semesters';
 const PROGRAMS_COL = 'programs';
@@ -262,6 +263,15 @@ export const updateComplaintStatus = async (id: string, status: ComplaintStatus)
     dateUpdated: new Date().toISOString() 
   });
 };
+
+// --- ANNOUNCEMENTS ---
+export const getAnnouncements = async (): Promise<Announcement[]> => fetchCollection<Announcement>(ANNOUNCEMENTS_COL);
+
+export const addAnnouncement = async (announcement: Announcement) => {
+  const { id, ...data } = announcement;
+  await addDoc(collection(db, ANNOUNCEMENTS_COL), data);
+};
+
 
 // --- SETTINGS ---
 export const getSettings = async (): Promise<SystemSettings> => {

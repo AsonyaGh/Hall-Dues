@@ -89,6 +89,16 @@ export interface Complaint {
   dateUpdated?: string;
 }
 
+export interface Announcement {
+  id: string;
+  title: string;
+  message: string;
+  senderName: string;
+  senderRole: UserRole;
+  targetHallId: string; // 'ALL' or specific hall ID
+  datePosted: string;
+}
+
 export interface SystemSettings {
   currentSemesterId?: string; // Reference to the active Semester document
   currentAcademicYear: string; // Fallback

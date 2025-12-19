@@ -11,6 +11,7 @@ import HallDashboard from './pages/hall/HallDashboard';
 import StudentDashboard from './pages/student/StudentDashboard';
 import DuesManagement from './pages/DuesManagement';
 import ProgramsList from './pages/ProgramsList';
+import Announcements from './pages/Announcements';
 import { Loader2 } from 'lucide-react';
 
 // Placeholder components for routes not fully detailed in this snippet
@@ -62,6 +63,7 @@ function App() {
                   {/* Shared Route */}
                   <Route path="/dues" element={<DuesManagement />} />
                   <Route path="/programs" element={<ProgramsList />} />
+                  <Route path="/announcements" element={<Announcements />} />
 
                   {/* Admin Routes */}
                   <Route path="/admin/halls" element={<AdminDashboard />} /> 
