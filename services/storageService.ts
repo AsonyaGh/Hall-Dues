@@ -6,12 +6,12 @@ import {
   setDoc, 
   updateDoc, 
   addDoc, 
-  query, 
-  where,
   getDoc,
   writeBatch
 } from 'firebase/firestore';
-import { db } from './firebase';
+import { initializeApp, deleteApp } from 'firebase/app';
+import { getAuth, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail } from 'firebase/auth';
+import { db, auth, firebaseConfig } from './firebase';
 import { User, Hall, Batch, Payment, Complaint, SystemSettings, UserRole, ComplaintStatus, Semester, AcademicProgram } from '../types';
 import { INITIAL_HALLS, INITIAL_BATCHES, DEFAULT_DUES, DEMO_USERS } from '../constants';
 
@@ -26,55 +26,81 @@ const SEMESTERS_COL = 'semesters';
 const PROGRAMS_COL = 'programs';
 const SETTINGS_DOC_ID = 'global_config';
 
+// Helper to handle offline/unavailable errors for reads
+const getDocSafe = async (ref: any) => {
+    try {
+        return await getDoc(ref);
+    } catch (error: any) {
+        if (error.code === 'unavailable' || error.message?.includes('offline') || error.code === 'failed-precondition') {
+            console.warn("Firestore offline/unavailable: returning empty snapshot");
+            return { exists: () => false, data: () => undefined } as any;
+        }
+        throw error;
+    }
+};
+
 // --- INITIALIZATION (SEEDING) ---
 export const initializeData = async () => {
-  const settingsRef = doc(db, SETTINGS_COL, SETTINGS_DOC_ID);
-  const snap = await getDoc(settingsRef);
+  try {
+      const settingsRef = doc(db, SETTINGS_COL, SETTINGS_DOC_ID);
+      // Use safe get to avoid crash on offline load
+      const snap = await getDocSafe(settingsRef);
 
-  if (!snap.exists()) {
-    console.log("Seeding Database...");
-    
-    // 1. Programs
-    const initialPrograms: AcademicProgram[] = [
-        { id: 'NAC', code: 'NAC', name: 'Nurse Assistant Clinical', durationYears: 2 },
-        { id: 'RGN', code: 'RGN', name: 'Registered General Nursing', durationYears: 3 }
-    ];
-    for(const p of initialPrograms) {
-        await setDoc(doc(db, PROGRAMS_COL, p.id), p);
-    }
+      if (!snap.exists()) {
+        console.log("Seeding Database (Offline-Safe Mode)...");
+        
+        // 1. Programs
+        const initialPrograms: AcademicProgram[] = [
+            { id: 'NAC', code: 'NAC', name: 'Nurse Assistant Clinical', durationYears: 2 },
+            { id: 'RGN', code: 'RGN', name: 'Registered General Nursing', durationYears: 3 }
+        ];
+        for(const p of initialPrograms) {
+            await setDoc(doc(db, PROGRAMS_COL, p.id), p);
+        }
 
-    // 2. Settings (Pre-2025/2026 default)
-    const defaultSettings: SystemSettings = {
-      currentAcademicYear: '2025/2026',
-      currentSemester: 1,
-      defaultDuesAmount: DEFAULT_DUES,
-      isSemesterOpen: true,
-    };
-    await setDoc(settingsRef, defaultSettings);
+        // 2. Settings (Pre-2025/2026 default)
+        const defaultSettings: SystemSettings = {
+          currentAcademicYear: '2025/2026',
+          currentSemester: 1,
+          defaultDuesAmount: DEFAULT_DUES,
+          isSemesterOpen: true,
+        };
+        await setDoc(settingsRef, defaultSettings);
 
-    // 3. Halls
-    for (const hall of INITIAL_HALLS) {
-      await setDoc(doc(db, HALLS_COL, hall.id), hall);
-    }
+        // 3. Halls
+        for (const hall of INITIAL_HALLS) {
+          await setDoc(doc(db, HALLS_COL, hall.id), hall);
+        }
 
-    // 4. Batches
-    for (const batch of INITIAL_BATCHES) {
-      await setDoc(doc(db, BATCHES_COL, batch.id), batch);
-    }
+        // 4. Batches
+        for (const batch of INITIAL_BATCHES) {
+          await setDoc(doc(db, BATCHES_COL, batch.id), batch);
+        }
 
-    // 5. Users 
-    for (const user of DEMO_USERS) {
-      const { password, ...userData } = user as any; 
-      await setDoc(doc(db, USERS_COL, userData.email), userData); 
-    }
-    console.log("Database Seeded!");
+        // 5. Users 
+        for (const user of DEMO_USERS) {
+          const { password, ...userData } = user as any; 
+          await setDoc(doc(db, USERS_COL, userData.email), userData); 
+        }
+        console.log("Database Seeded!");
+      }
+  } catch (e) {
+      console.warn("Initialization skipped due to connectivity issues:", e);
   }
 };
 
 // --- GENERIC HELPERS ---
 const fetchCollection = async <T>(colName: string): Promise<T[]> => {
-  const snapshot = await getDocs(collection(db, colName));
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as unknown as T));
+  try {
+    const snapshot = await getDocs(collection(db, colName));
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as unknown as T));
+  } catch (error: any) {
+    if (error.code === 'unavailable' || error.message?.includes('offline')) {
+       console.warn(`Fetch ${colName} failed (offline). Returning empty list.`);
+       return [];
+    }
+    throw error;
+  }
 };
 
 // --- PROGRAMS ---
@@ -90,10 +116,9 @@ export const getSemesters = async (): Promise<Semester[]> => fetchCollection<Sem
 export const getActiveSemester = async (): Promise<Semester | null> => {
     const settings = await getSettings();
     if (settings.currentSemesterId) {
-        const snap = await getDoc(doc(db, SEMESTERS_COL, settings.currentSemesterId));
+        const snap = await getDocSafe(doc(db, SEMESTERS_COL, settings.currentSemesterId));
         if (snap.exists()) return { id: snap.id, ...snap.data() } as Semester;
     }
-    // Fallback if no ID but settings exist (legacy)
     return null; 
 };
 
@@ -125,7 +150,7 @@ export const setupNewSemester = async (semesterData: Omit<Semester, 'id' | 'crea
         currentSemester: semesterData.semesterNumber,
         currentSemesterId: newSemRef.id,
         defaultDuesAmount: semesterData.duesAmount,
-        isSemesterOpen: true // Explicitly open upon creation
+        isSemesterOpen: true 
     });
 
     await batch.commit();
@@ -137,7 +162,7 @@ export const getUsers = async (): Promise<User[]> => fetchCollection<User>(USERS
 
 export const getUserProfile = async (email: string): Promise<User | null> => {
   const docRef = doc(db, USERS_COL, email);
-  const snap = await getDoc(docRef);
+  const snap = await getDocSafe(docRef);
   if (snap.exists()) return { id: snap.id, ...snap.data() } as User;
   return null;
 };
@@ -148,20 +173,53 @@ export const updateUser = async (user: User) => {
     await updateDoc(docRef, data);
 };
 
+// REAL USER CREATION (Modular SDK)
+export const registerUserWithPassword = async (user: User, password: string) => {
+    // 1. Initialize secondary app
+    const secondaryApp = initializeApp(firebaseConfig, "SecondaryApp");
+    const secondaryAuth = getAuth(secondaryApp);
+
+    try {
+        // 2. Create User in Auth
+        const userCredential = await createUserWithEmailAndPassword(secondaryAuth, user.email, password);
+        const uid = userCredential.user.uid;
+
+        // 3. Save User Profile in Firestore (Main App)
+        const userData = { ...user, id: uid };
+        await setDoc(doc(db, USERS_COL, user.email), userData);
+        
+        // 4. Cleanup
+        await signOut(secondaryAuth);
+        await deleteApp(secondaryApp);
+        
+        return userData;
+    } catch (error) {
+        await deleteApp(secondaryApp);
+        throw error;
+    }
+};
+
 export const createUserProfile = async (user: User) => {
   const docRef = doc(db, USERS_COL, user.email);
   const data = JSON.parse(JSON.stringify(user));
   await setDoc(docRef, data, { merge: true });
 };
 
-// SECURITY: This allows admin to simulate a password reset. 
-// In a real production app, this must be a Cloud Function using admin.auth().updateUser().
-// The client SDK cannot change another user's password.
+// REAL PASSWORD RESET (via Email)
+export const adminSendPasswordReset = async (email: string) => {
+    try {
+        await sendPasswordResetEmail(auth, email);
+        return true;
+    } catch (error) {
+        throw error;
+    }
+};
+
 export const adminUpdatePassword = async (userId: string, newPass: string) => {
-    console.log(`[MOCK SECURITY] Request to update password for user ${userId} to: ${newPass}`);
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    return true; 
+    console.warn("Security Restriction: Cannot update existing user password from client SDK.");
+    // Simulate delay
+    await new Promise(resolve => setTimeout(resolve, 500));
+    throw new Error("Cannot manually change existing passwords. Please use 'Send Reset Email' or delete and recreate the user.");
 };
 
 // --- HALLS ---
@@ -201,31 +259,36 @@ export const updateComplaintStatus = async (id: string, status: ComplaintStatus)
 // --- SETTINGS ---
 export const getSettings = async (): Promise<SystemSettings> => {
   const docRef = doc(db, SETTINGS_COL, SETTINGS_DOC_ID);
-  const snap = await getDoc(docRef);
+  const snap = await getDocSafe(docRef);
   if (snap.exists()) return snap.data() as SystemSettings;
   return { currentAcademicYear: '2025/2026', currentSemester: 1, defaultDuesAmount: 20, isSemesterOpen: true };
 };
 
 // --- ANALYTICS HELPERS ---
 export const getHallStats = async (hallId: string) => {
-  const [allUsers, allPayments, allComplaints, settings] = await Promise.all([
-    getUsers(),
-    getPayments(),
-    getComplaints(),
-    getSettings()
-  ]);
+  try {
+    const [allUsers, allPayments, allComplaints, settings] = await Promise.all([
+      getUsers(),
+      getPayments(),
+      getComplaints(),
+      getSettings()
+    ]);
 
-  const users = allUsers.filter(u => u.hallId === hallId && u.role === UserRole.STUDENT);
-  const payments = allPayments.filter(p => p.hallId === hallId);
-  const complaints = allComplaints.filter(c => c.hallId === hallId && c.status === ComplaintStatus.PENDING);
-  
-  const semesterKey = `${settings.currentAcademicYear} - Sem ${settings.currentSemester}`;
-  const paidCount = new Set(payments.filter(p => p.semester === semesterKey).map(p => p.studentId)).size;
+    const users = allUsers.filter(u => u.hallId === hallId && u.role === UserRole.STUDENT);
+    const payments = allPayments.filter(p => p.hallId === hallId);
+    const complaints = allComplaints.filter(c => c.hallId === hallId && c.status === ComplaintStatus.PENDING);
+    
+    const semesterKey = `${settings.currentAcademicYear} - Sem ${settings.currentSemester}`;
+    const paidCount = new Set(payments.filter(p => p.semester === semesterKey).map(p => p.studentId)).size;
 
-  return {
-      totalStudents: users.length,
-      totalCollected: payments.reduce((sum, p) => sum + p.amount, 0),
-      pendingComplaints: complaints.length,
-      paidPercentage: users.length > 0 ? (paidCount / users.length) * 100 : 0
-  };
+    return {
+        totalStudents: users.length,
+        totalCollected: payments.reduce((sum, p) => sum + p.amount, 0),
+        pendingComplaints: complaints.length,
+        paidPercentage: users.length > 0 ? (paidCount / users.length) * 100 : 0
+    };
+  } catch (e) {
+      console.warn("Failed to get stats", e);
+      return { totalStudents: 0, totalCollected: 0, pendingComplaints: 0, paidPercentage: 0 };
+  }
 };
