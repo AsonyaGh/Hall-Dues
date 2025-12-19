@@ -1,18 +1,26 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { getHallStats, getPayments, getComplaints, updateComplaintStatus, addPayment, getHalls } from '../../services/storageService';
-import { ComplaintStatus, UserRole, Payment, Complaint, Hall } from '../../types';
-import { Wallet, FileText, CheckCircle, Clock, Loader2 } from 'lucide-react';
+import { 
+    getHallStats, getPayments, getComplaints, updateComplaintStatus, addPayment, getHalls, 
+    getUsers, addExpense, getExpenses, adminSendPasswordReset, deleteUserProfile, updateUser, getBatches
+} from '../../services/storageService';
+import { ComplaintStatus, UserRole, Payment, Complaint, Hall, User, Expense, Batch } from '../../types';
+import { Wallet, FileText, CheckCircle, Clock, Loader2, Users, Receipt, Plus, Search, Edit2, Trash2, KeyRound, X } from 'lucide-react';
 
 const HallDashboard = () => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'overview' | 'payments' | 'complaints'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'students' | 'payments' | 'expenses' | 'complaints'>('overview');
   const [loading, setLoading] = useState(true);
   
+  // Data State
   const [hallStats, setHallStats] = useState<any>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [complaints, setComplaints] = useState<Complaint[]>([]);
+  const [students, setStudents] = useState<User[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [hallName, setHallName] = useState('Hall');
+  const [batches, setBatches] = useState<Batch[]>([]);
 
   // Form State for Payment
   const [payAmount, setPayAmount] = useState(20);
@@ -20,22 +28,40 @@ const HallDashboard = () => {
   const [payReceipt, setPayReceipt] = useState('');
   const [payMsg, setPayMsg] = useState('');
 
+  // Form State for Expenses
+  const [expTitle, setExpTitle] = useState('');
+  const [expAmount, setExpAmount] = useState(0);
+  const [expCategory, setExpCategory] = useState('Maintenance');
+  const [expDesc, setExpDesc] = useState('');
+  const [showExpForm, setShowExpForm] = useState(false);
+
+  // Student Management State
+  const [searchTerm, setSearchTerm] = useState('');
+  const [editingStudent, setEditingStudent] = useState<User | null>(null);
+
   const refreshData = async () => {
     if (!user || !user.hallId) return;
     
     setLoading(true);
     try {
-        const [stats, p, c, halls] = await Promise.all([
+        const [stats, p, c, h, u, e, b] = await Promise.all([
             getHallStats(user.hallId),
             getPayments(),
             getComplaints(),
-            getHalls()
+            getHalls(),
+            getUsers(),
+            getExpenses(),
+            getBatches()
         ]);
         
         setHallStats(stats);
         setPayments(p.filter(x => x.hallId === user.hallId));
         setComplaints(c.filter(x => x.hallId === user.hallId));
-        const currentHall = halls.find(h => h.id === user.hallId);
+        setStudents(u.filter(x => x.hallId === user.hallId && x.role === UserRole.STUDENT));
+        setExpenses(e.filter(x => x.hallId === user.hallId));
+        setBatches(b);
+        
+        const currentHall = h.find(x => x.id === user.hallId);
         if (currentHall) setHallName(currentHall.name);
         
     } catch(err) {
@@ -49,6 +75,7 @@ const HallDashboard = () => {
     refreshData();
   }, [user]);
 
+  // --- Handlers ---
   const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if(!user || !user.hallId) return;
@@ -58,9 +85,9 @@ const HallDashboard = () => {
         hallId: user.hallId,
         amount: payAmount,
         receiptNumber: payReceipt,
-        semester: '2023/2024 - Sem 1',
+        semester: '2025/2026 - Sem 1', // In real app, fetch active semester
         studentId: payStudentId,
-        studentName: payStudentId, // Mock name
+        studentName: payStudentId, // Mock name or fetch real name
         datePaid: new Date().toISOString(),
         recordedBy: user.id
     };
@@ -68,8 +95,6 @@ const HallDashboard = () => {
     setPayMsg('Payment Recorded Successfully!');
     setPayStudentId('');
     setPayReceipt('');
-    
-    // Refresh list
     await refreshData();
     setTimeout(() => setPayMsg(''), 3000);
   };
@@ -78,58 +103,241 @@ const HallDashboard = () => {
     await updateComplaintStatus(id, status);
     await refreshData();
   };
+
+  const handleAddExpense = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if(!user || !user.hallId) return;
+      
+      const newExp: Expense = {
+          id: '',
+          hallId: user.hallId,
+          title: expTitle,
+          amount: expAmount,
+          category: expCategory,
+          description: expDesc,
+          date: new Date().toISOString(),
+          recordedBy: user.id
+      };
+      await addExpense(newExp);
+      setShowExpForm(false);
+      setExpTitle('');
+      setExpAmount(0);
+      setExpDesc('');
+      await refreshData();
+  };
+
+  const handleDeleteStudent = async (student: User) => {
+      if(!window.confirm(`Are you sure you want to permanently delete ${student.firstName} ${student.lastName}?`)) return;
+      try {
+          await deleteUserProfile(student.email);
+          await refreshData();
+      } catch (e: any) {
+          alert("Error deleting student: " + e.message);
+      }
+  };
+
+  const handleResetPassword = async (email: string) => {
+      if(window.confirm(`Send password reset email to ${email}?`)) {
+          try {
+              await adminSendPasswordReset(email);
+              alert("Reset email sent.");
+          } catch (e: any) {
+              alert("Error: " + e.message);
+          }
+      }
+  };
+
+  const handleUpdateStudent = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if(!editingStudent) return;
+      try {
+          await updateUser(editingStudent);
+          setEditingStudent(null);
+          await refreshData();
+      } catch (e: any) {
+          alert("Error updating: " + e.message);
+      }
+  };
+
+  // --- Computations ---
+  const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
+  const totalIncome = hallStats?.totalCollected || 0;
+  const balance = totalIncome - totalExpenses;
+
+  const filteredStudents = students.filter(s => 
+      s.firstName.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      s.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (s.studentId || '').toLowerCase().includes(searchTerm.toLowerCase())
+  );
   
+  const canViewFinancials = user?.role === UserRole.HALL_MASTER;
+
   if (!user || !user.hallId) return <div>Hall Access Error</div>;
   if (loading && !hallStats) return <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-green-600"/></div>;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
        <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-800">{hallName} Dashboard</h1>
         <div className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium">
-          {user.role === UserRole.HALL_MASTER ? 'Hall Master' : 'Hall Executive'} Mode
+          {user.role === UserRole.HALL_MASTER ? 'Hall Master' : 'Hall Executive'}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-           <p className="text-xs text-gray-500 uppercase">Total Collected</p>
-           <h3 className="text-2xl font-bold text-gray-800">GH₵ {hallStats?.totalCollected || 0}</h3>
-        </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-           <p className="text-xs text-gray-500 uppercase">Pending Complaints</p>
-           <h3 className="text-2xl font-bold text-gray-800">{hallStats?.pendingComplaints || 0}</h3>
-        </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-           <p className="text-xs text-gray-500 uppercase">Paid Percentage</p>
-           <h3 className="text-2xl font-bold text-gray-800">{hallStats?.paidPercentage?.toFixed(1) || 0}%</h3>
-        </div>
-      </div>
-
-      <div className="flex gap-4 border-b border-gray-200 mt-8">
-        <button onClick={() => setActiveTab('overview')} className={`pb-2 px-4 text-sm font-medium ${activeTab === 'overview' ? 'border-b-2 border-green-600 text-green-700' : 'text-gray-500'}`}>Overview</button>
-        <button onClick={() => setActiveTab('payments')} className={`pb-2 px-4 text-sm font-medium ${activeTab === 'payments' ? 'border-b-2 border-green-600 text-green-700' : 'text-gray-500'}`}>Record Payment</button>
-        <button onClick={() => setActiveTab('complaints')} className={`pb-2 px-4 text-sm font-medium ${activeTab === 'complaints' ? 'border-b-2 border-green-600 text-green-700' : 'text-gray-500'}`}>Complaints</button>
+      <div className="flex flex-col md:flex-row gap-4 border-b border-gray-200 overflow-x-auto">
+        <button onClick={() => setActiveTab('overview')} className={`pb-2 px-4 text-sm font-medium whitespace-nowrap ${activeTab === 'overview' ? 'border-b-2 border-green-600 text-green-700' : 'text-gray-500'}`}>Overview</button>
+        <button onClick={() => setActiveTab('students')} className={`pb-2 px-4 text-sm font-medium whitespace-nowrap ${activeTab === 'students' ? 'border-b-2 border-green-600 text-green-700' : 'text-gray-500'}`}>Students</button>
+        <button onClick={() => setActiveTab('payments')} className={`pb-2 px-4 text-sm font-medium whitespace-nowrap ${activeTab === 'payments' ? 'border-b-2 border-green-600 text-green-700' : 'text-gray-500'}`}>Payments</button>
+        <button onClick={() => setActiveTab('expenses')} className={`pb-2 px-4 text-sm font-medium whitespace-nowrap ${activeTab === 'expenses' ? 'border-b-2 border-green-600 text-green-700' : 'text-gray-500'}`}>Expenses</button>
+        <button onClick={() => setActiveTab('complaints')} className={`pb-2 px-4 text-sm font-medium whitespace-nowrap ${activeTab === 'complaints' ? 'border-b-2 border-green-600 text-green-700' : 'text-gray-500'}`}>Complaints</button>
       </div>
 
       {activeTab === 'overview' && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <h3 className="font-semibold mb-4">Recent Activity</h3>
-            <div className="space-y-4">
-                {payments.slice(-5).reverse().map(p => (
-                    <div key={p.id} className="flex items-center justify-between text-sm">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 bg-green-50 text-green-600 rounded-full"><Wallet className="h-4 w-4"/></div>
-                            <div>
-                                <p className="font-medium">Payment Received</p>
-                                <p className="text-gray-500 text-xs">{p.studentId} paid GH₵ {p.amount}</p>
-                            </div>
-                        </div>
-                        <span className="text-gray-400 text-xs">{new Date(p.datePaid).toLocaleDateString()}</span>
+          <div className="space-y-6">
+              {canViewFinancials ? (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                       <p className="text-xs text-gray-500 uppercase">Total Income</p>
+                       <h3 className="text-2xl font-bold text-green-700">GH₵ {totalIncome}</h3>
                     </div>
-                ))}
-            </div>
-        </div>
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                       <p className="text-xs text-gray-500 uppercase">Total Expenses</p>
+                       <h3 className="text-2xl font-bold text-red-600">GH₵ {totalExpenses}</h3>
+                    </div>
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                       <p className="text-xs text-gray-500 uppercase">Current Balance</p>
+                       <h3 className={`text-2xl font-bold ${balance >= 0 ? 'text-gray-800' : 'text-red-500'}`}>GH₵ {balance}</h3>
+                    </div>
+                  </div>
+              ) : (
+                  <div className="p-4 bg-blue-50 text-blue-800 rounded-lg border border-blue-100">
+                      <p className="font-semibold">Hall Executive View</p>
+                      <p className="text-sm">Financial summaries are restricted to Hall Masters.</p>
+                  </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <p className="text-xs text-gray-500 uppercase font-semibold">Population</p>
+                    <div className="flex items-center gap-2 mt-1">
+                        <Users className="h-5 w-5 text-green-600" />
+                        <h3 className="text-xl font-bold text-gray-800">{hallStats?.totalStudents || 0} Students</h3>
+                    </div>
+                  </div>
+                  <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <p className="text-xs text-gray-500 uppercase font-semibold">Issues</p>
+                    <div className="flex items-center gap-2 mt-1">
+                         <FileText className="h-5 w-5 text-yellow-600" />
+                         <h3 className="text-xl font-bold text-gray-800">{hallStats?.pendingComplaints || 0} Pending Complaints</h3>
+                    </div>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {activeTab === 'students' && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="p-4 border-b border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
+                  <h3 className="font-semibold text-gray-800">Hall Students</h3>
+                  <div className="relative w-full md:w-64">
+                      <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                      <input 
+                        type="text" 
+                        placeholder="Search student..." 
+                        value={searchTerm} 
+                        onChange={(e) => setSearchTerm(e.target.value)} 
+                        className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-green-500" 
+                      />
+                  </div>
+              </div>
+              <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left">
+                      <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
+                          <tr>
+                              <th className="px-6 py-3">Student</th>
+                              <th className="px-6 py-3">Batch</th>
+                              <th className="px-6 py-3">Program</th>
+                              <th className="px-6 py-3 text-center">Actions</th>
+                          </tr>
+                      </thead>
+                      <tbody>
+                          {filteredStudents.map(s => (
+                              <tr key={s.email} className="border-b border-gray-50 hover:bg-gray-50">
+                                  <td className="px-6 py-4">
+                                      <div className="font-medium text-gray-900">{s.firstName} {s.lastName}</div>
+                                      <div className="text-xs text-gray-500">{s.studentId}</div>
+                                      <div className="text-xs text-gray-400">{s.email}</div>
+                                  </td>
+                                  <td className="px-6 py-4">{batches.find(b => b.id === s.batchId)?.name || s.batchId}</td>
+                                  <td className="px-6 py-4">{s.program}</td>
+                                  <td className="px-6 py-4 text-center">
+                                      {/* Hall Master Actions */}
+                                      {user.role === UserRole.HALL_MASTER ? (
+                                          <div className="flex justify-center gap-2">
+                                              <button onClick={() => setEditingStudent(s)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded" title="Edit"><Edit2 className="h-4 w-4"/></button>
+                                              <button onClick={() => handleResetPassword(s.email)} className="p-1.5 text-yellow-600 hover:bg-yellow-50 rounded" title="Reset Password"><KeyRound className="h-4 w-4"/></button>
+                                              <button onClick={() => handleDeleteStudent(s)} className="p-1.5 text-red-600 hover:bg-red-50 rounded" title="Delete"><Trash2 className="h-4 w-4"/></button>
+                                          </div>
+                                      ) : <span className="text-xs text-gray-400">Read Only</span>}
+                                  </td>
+                              </tr>
+                          ))}
+                          {filteredStudents.length === 0 && <tr><td colSpan={4} className="p-6 text-center text-gray-500">No students found.</td></tr>}
+                      </tbody>
+                  </table>
+              </div>
+          </div>
+      )}
+
+      {activeTab === 'expenses' && (
+          <div className="space-y-6">
+              <div className="flex justify-between items-center">
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-800">Expense Tracking</h3>
+                    <p className="text-sm text-gray-500">Record hall maintenance and event costs.</p>
+                  </div>
+                  <button onClick={() => setShowExpForm(true)} className="bg-red-600 hover:bg-red-700 text-white text-sm font-bold px-4 py-2 rounded flex items-center gap-2">
+                      <Plus className="h-4 w-4" /> Record Expense
+                  </button>
+              </div>
+
+              {canViewFinancials && (
+                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 flex justify-between items-center">
+                      <span className="text-gray-600 font-medium">Total Hall Expenses</span>
+                      <span className="text-xl font-bold text-red-600">GH₵ {totalExpenses}</span>
+                  </div>
+              )}
+
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                  <table className="w-full text-sm text-left">
+                      <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
+                          <tr>
+                              <th className="px-6 py-3">Date</th>
+                              <th className="px-6 py-3">Title/Desc</th>
+                              <th className="px-6 py-3">Category</th>
+                              <th className="px-6 py-3 text-right">Amount</th>
+                          </tr>
+                      </thead>
+                      <tbody>
+                          {expenses.length === 0 ? (
+                              <tr><td colSpan={4} className="p-8 text-center text-gray-500">No expenses recorded yet.</td></tr>
+                          ) : (
+                              expenses.slice().reverse().map(e => (
+                                  <tr key={e.id} className="border-b border-gray-50">
+                                      <td className="px-6 py-4 text-gray-500">{new Date(e.date).toLocaleDateString()}</td>
+                                      <td className="px-6 py-4">
+                                          <div className="font-medium text-gray-900">{e.title}</div>
+                                          <div className="text-xs text-gray-500">{e.description}</div>
+                                      </td>
+                                      <td className="px-6 py-4"><span className="px-2 py-1 bg-gray-100 rounded text-xs">{e.category}</span></td>
+                                      <td className="px-6 py-4 text-right font-bold text-red-600">GH₵ {e.amount}</td>
+                                  </tr>
+                              ))
+                          )}
+                      </tbody>
+                  </table>
+              </div>
+          </div>
       )}
 
       {activeTab === 'payments' && (
@@ -222,6 +430,68 @@ const HallDashboard = () => {
            </table>
         </div>
       )}
+
+      {/* Expense Modal */}
+      {showExpForm && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+                  <div className="flex justify-between items-center mb-4">
+                      <h3 className="font-bold text-gray-800">Record Expense</h3>
+                      <button onClick={() => setShowExpForm(false)}><X className="h-5 w-5"/></button>
+                  </div>
+                  <form onSubmit={handleAddExpense} className="space-y-4">
+                      <div>
+                          <label className="text-xs font-bold text-gray-500">Title</label>
+                          <input required type="text" value={expTitle} onChange={e => setExpTitle(e.target.value)} className="w-full border p-2 rounded" placeholder="e.g. Repair of broken pipe"/>
+                      </div>
+                      <div>
+                          <label className="text-xs font-bold text-gray-500">Amount (GH₵)</label>
+                          <input required type="number" value={expAmount} onChange={e => setExpAmount(Number(e.target.value))} className="w-full border p-2 rounded"/>
+                      </div>
+                      <div>
+                          <label className="text-xs font-bold text-gray-500">Category</label>
+                          <select value={expCategory} onChange={e => setExpCategory(e.target.value)} className="w-full border p-2 rounded">
+                              <option value="Maintenance">Maintenance</option>
+                              <option value="Utilities">Utilities</option>
+                              <option value="Events">Events</option>
+                              <option value="Supplies">Supplies</option>
+                              <option value="Other">Other</option>
+                          </select>
+                      </div>
+                      <div>
+                          <label className="text-xs font-bold text-gray-500">Description</label>
+                          <textarea value={expDesc} onChange={e => setExpDesc(e.target.value)} className="w-full border p-2 rounded h-20" placeholder="Details..."/>
+                      </div>
+                      <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 rounded">Save Record</button>
+                  </form>
+              </div>
+          </div>
+      )}
+
+      {/* Edit Student Modal (Simplified version for Hall Masters) */}
+      {editingStudent && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+                  <div className="flex justify-between items-center mb-4">
+                      <h3 className="font-bold text-gray-800">Edit Student</h3>
+                      <button onClick={() => setEditingStudent(null)}><X className="h-5 w-5"/></button>
+                  </div>
+                  <form onSubmit={handleUpdateStudent} className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                          <input type="text" value={editingStudent.firstName} onChange={e => setEditingStudent({...editingStudent, firstName: e.target.value})} className="border p-2 rounded" placeholder="First Name"/>
+                          <input type="text" value={editingStudent.lastName} onChange={e => setEditingStudent({...editingStudent, lastName: e.target.value})} className="border p-2 rounded" placeholder="Last Name"/>
+                      </div>
+                      <input type="text" value={editingStudent.studentId || ''} onChange={e => setEditingStudent({...editingStudent, studentId: e.target.value})} className="border p-2 rounded w-full" placeholder="Index Number"/>
+                      <select value={editingStudent.batchId || ''} onChange={e => setEditingStudent({...editingStudent, batchId: e.target.value})} className="border p-2 rounded w-full">
+                          <option value="">Select Batch</option>
+                          {batches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                      </select>
+                      <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded">Save Changes</button>
+                  </form>
+              </div>
+          </div>
+      )}
+
     </div>
   );
 };

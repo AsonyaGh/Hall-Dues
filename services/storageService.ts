@@ -13,7 +13,7 @@ import {
 import { initializeApp, deleteApp } from 'firebase/app';
 import * as firebaseAuth from 'firebase/auth';
 import { db, auth, firebaseConfig } from './firebase';
-import { User, Hall, Batch, Payment, Complaint, SystemSettings, UserRole, ComplaintStatus, Semester, AcademicProgram, Announcement } from '../types';
+import { User, Hall, Batch, Payment, Complaint, SystemSettings, UserRole, ComplaintStatus, Semester, AcademicProgram, Announcement, Expense } from '../types';
 import { INITIAL_HALLS, INITIAL_BATCHES, DEFAULT_DUES, DEMO_USERS } from '../constants';
 
 const { getAuth, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail } = firebaseAuth as any;
@@ -25,6 +25,7 @@ const BATCHES_COL = 'batches';
 const PAYMENTS_COL = 'payments';
 const COMPLAINTS_COL = 'complaints';
 const ANNOUNCEMENTS_COL = 'announcements';
+const EXPENSES_COL = 'expenses';
 const SETTINGS_COL = 'settings';
 const SEMESTERS_COL = 'semesters';
 const PROGRAMS_COL = 'programs';
@@ -247,6 +248,18 @@ export const getPayments = async (): Promise<Payment[]> => fetchCollection<Payme
 export const addPayment = async (payment: Payment) => {
   const { id, ...data } = payment; 
   await addDoc(collection(db, PAYMENTS_COL), data);
+};
+
+// --- EXPENSES ---
+export const getExpenses = async (): Promise<Expense[]> => fetchCollection<Expense>(EXPENSES_COL);
+
+export const addExpense = async (expense: Expense) => {
+  const { id, ...data } = expense;
+  await addDoc(collection(db, EXPENSES_COL), data);
+};
+
+export const deleteExpense = async (id: string) => {
+  await deleteDoc(doc(db, EXPENSES_COL, id));
 };
 
 // --- COMPLAINTS ---

@@ -4,16 +4,17 @@ import { useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { 
     getHalls, getBatches, getUsers, getPayments, saveBatch, updateUser, getSettings, 
-    registerUserWithPassword, getPrograms, addProgram, setupNewSemester, getSemesters, getActiveSemester, adminSendPasswordReset, deleteUserProfile
+    registerUserWithPassword, getPrograms, addProgram, setupNewSemester, getSemesters, getActiveSemester, adminSendPasswordReset, deleteUserProfile,
+    getExpenses, addExpense
 } from '../../services/storageService';
-import { Batch, UserRole, Hall, User, Payment, SystemSettings, AcademicProgram, Semester, Program } from '../../types';
+import { Batch, UserRole, Hall, User, Payment, SystemSettings, AcademicProgram, Semester, Program, Expense } from '../../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Users, GraduationCap, Wallet, Building2, Plus, Loader2, Search, Edit2, Shield, ShieldAlert, UserX, CheckCircle, AlertTriangle, X, UserCog, Calendar, BookOpen, Clock, Lock, Key, Download, FileText, Filter, Trash2 } from 'lucide-react';
+import { Users, GraduationCap, Wallet, Building2, Plus, Loader2, Search, Edit2, Shield, ShieldAlert, UserX, CheckCircle, AlertTriangle, X, UserCog, Calendar, BookOpen, Clock, Lock, Key, Download, FileText, Filter, Trash2, Receipt } from 'lucide-react';
 
 const AdminDashboard = () => {
   const { user: currentUser } = useAuth();
   const location = useLocation();
-  const [activeTab, setActiveTab] = useState<'overview' | 'academics' | 'students' | 'masters' | 'reports'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'academics' | 'students' | 'masters' | 'expenses' | 'reports'>('overview');
   const [loading, setLoading] = useState(true);
   
   // Data State
@@ -24,6 +25,7 @@ const AdminDashboard = () => {
   const [activeSemester, setActiveSemester] = useState<Semester | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [settings, setSettings] = useState<SystemSettings | null>(null);
 
   // UI State
@@ -55,6 +57,12 @@ const AdminDashboard = () => {
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [newBatch, setNewBatch] = useState({ name: '', program: 'NAC' });
 
+  // Expense Modal
+  const [showExpModal, setShowExpModal] = useState(false);
+  const [newExp, setNewExp] = useState<Partial<Expense>>({
+      title: '', amount: 0, category: 'Maintenance', description: '', hallId: 'GENERAL'
+  });
+
   useEffect(() => {
     if (location.pathname.includes('/admin/students')) setActiveTab('students');
     else if (location.pathname.includes('/admin/academics') || location.pathname.includes('/admin/batches')) setActiveTab('academics');
@@ -75,7 +83,7 @@ const AdminDashboard = () => {
 
   const loadData = async () => {
     try {
-        const [h, b, u, p, s, prog, sem, activeSem] = await Promise.all([
+        const [h, b, u, p, s, prog, sem, activeSem, exp] = await Promise.all([
             getHalls(),
             getBatches(),
             getUsers(),
@@ -83,7 +91,8 @@ const AdminDashboard = () => {
             getSettings(),
             getPrograms(),
             getSemesters(),
-            getActiveSemester()
+            getActiveSemester(),
+            getExpenses()
         ]);
         setHalls(h);
         setBatches(b);
@@ -93,6 +102,7 @@ const AdminDashboard = () => {
         setPrograms(prog);
         setSemesters(sem);
         setActiveSemester(activeSem);
+        setExpenses(exp);
     } catch (error) {
         console.error("Failed to load admin data", error);
     } finally {
@@ -253,6 +263,32 @@ const AdminDashboard = () => {
       }
   };
 
+  const handleAddExpense = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!currentUser) return;
+      setLoading(true);
+      try {
+          const expense: Expense = {
+              id: '',
+              hallId: newExp.hallId || 'GENERAL',
+              title: newExp.title || '',
+              amount: Number(newExp.amount),
+              category: newExp.category || 'Maintenance',
+              description: newExp.description || '',
+              date: new Date().toISOString(),
+              recordedBy: currentUser.id
+          };
+          await addExpense(expense);
+          setShowExpModal(false);
+          setNewExp({ title: '', amount: 0, category: 'Maintenance', description: '', hallId: 'GENERAL' });
+          await loadData();
+      } catch (e: any) {
+          alert("Error adding expense: " + e.message);
+      } finally {
+          setLoading(false);
+      }
+  };
+
   // --- Render Helpers ---
   const totalRevenue = payments.reduce((acc, curr) => acc + curr.amount, 0);
   const totalStudents = users.filter(u => u.role === UserRole.STUDENT || u.role === UserRole.HALL_EXECUTIVE).length;
@@ -295,8 +331,6 @@ const AdminDashboard = () => {
       const semId = targetSemester?.id;
 
       // Filter Users (Eligible for payment)
-      // Note: In a real system we'd check if user was active during that semester, 
-      // but for now we assume current users were active.
       const eligibleStudents = users.filter(u => 
           (u.role === UserRole.STUDENT || u.role === UserRole.HALL_EXECUTIVE) && 
           !u.isDismissed &&
@@ -310,12 +344,26 @@ const AdminDashboard = () => {
           return matchSem && matchHall;
       });
 
+      // Filter Expenses (Independent of Semester usually, but for report sake, we might check date range.
+      // For simplicity here, we assume expenses are not tied to semester objects directly but we show all or maybe active one? 
+      // Let's filter Expenses by hall. Date filtering is complex without semester dates. 
+      // We will show total expenses filtered by Hall for now, or all if ALL.)
+      const filteredExpenses = expenses.filter(e => {
+          if (reportHallFilter === 'ALL') return true;
+          return e.hallId === reportHallFilter;
+      });
+
       const paidStudentIds = new Set(filteredPayments.map(p => p.studentId));
       const defaulters = eligibleStudents.filter(u => !paidStudentIds.has(u.studentId || u.id));
 
+      const actualRevenue = filteredPayments.reduce((s, p) => s + p.amount, 0);
+      const totalExpensesAmount = filteredExpenses.reduce((s, e) => s + e.amount, 0);
+
       return {
           expectedRevenue: eligibleStudents.length * semDues,
-          actualRevenue: filteredPayments.reduce((s, p) => s + p.amount, 0),
+          actualRevenue,
+          totalExpensesAmount,
+          netBalance: actualRevenue - totalExpensesAmount,
           defaulters,
           studentCount: eligibleStudents.length,
           targetSemester
@@ -365,6 +413,7 @@ const AdminDashboard = () => {
         <button onClick={() => setActiveTab('overview')} className={`pb-3 px-4 text-sm font-medium whitespace-nowrap ${activeTab === 'overview' ? 'border-b-2 border-green-600 text-green-700' : 'text-gray-500 hover:text-green-600'}`}>Overview</button>
         <button onClick={() => setActiveTab('students')} className={`pb-3 px-4 text-sm font-medium whitespace-nowrap ${activeTab === 'students' ? 'border-b-2 border-green-600 text-green-700' : 'text-gray-500 hover:text-green-600'}`}>Students</button>
         <button onClick={() => setActiveTab('masters')} className={`pb-3 px-4 text-sm font-medium whitespace-nowrap ${activeTab === 'masters' ? 'border-b-2 border-green-600 text-green-700' : 'text-gray-500 hover:text-green-600'}`}>Hall Masters</button>
+        <button onClick={() => setActiveTab('expenses')} className={`pb-3 px-4 text-sm font-medium whitespace-nowrap ${activeTab === 'expenses' ? 'border-b-2 border-green-600 text-green-700' : 'text-gray-500 hover:text-green-600'}`}>Expenses</button>
         <button onClick={() => setActiveTab('academics')} className={`pb-3 px-4 text-sm font-medium whitespace-nowrap ${activeTab === 'academics' ? 'border-b-2 border-green-600 text-green-700' : 'text-gray-500 hover:text-green-600'}`}>Academics & Settings</button>
         <button onClick={() => setActiveTab('reports')} className={`pb-3 px-4 text-sm font-medium whitespace-nowrap ${activeTab === 'reports' ? 'border-b-2 border-green-600 text-green-700' : 'text-gray-500 hover:text-green-600'}`}>Reports</button>
       </div>
@@ -403,6 +452,53 @@ const AdminDashboard = () => {
                 </ResponsiveContainer>
             </div>
         </div>
+      )}
+
+      {/* --- EXPENSES TAB --- */}
+      {activeTab === 'expenses' && (
+          <div className="space-y-6">
+               <div className="flex justify-between items-center">
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-800">Expenses & Maintenance</h3>
+                    <p className="text-sm text-gray-500">Record operational costs for the school and halls.</p>
+                  </div>
+                  <button onClick={() => setShowExpModal(true)} className="bg-red-600 hover:bg-red-700 text-white text-sm font-bold px-4 py-2 rounded flex items-center gap-2">
+                      <Plus className="h-4 w-4" /> Add Expense
+                  </button>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                  <table className="w-full text-sm text-left">
+                      <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
+                          <tr>
+                              <th className="px-6 py-3">Date</th>
+                              <th className="px-6 py-3">Title/Desc</th>
+                              <th className="px-6 py-3">Hall</th>
+                              <th className="px-6 py-3">Category</th>
+                              <th className="px-6 py-3 text-right">Amount</th>
+                          </tr>
+                      </thead>
+                      <tbody>
+                          {expenses.length === 0 ? (
+                              <tr><td colSpan={5} className="p-8 text-center text-gray-500">No expenses recorded yet.</td></tr>
+                          ) : (
+                              expenses.slice().reverse().map(e => (
+                                  <tr key={e.id} className="border-b border-gray-50">
+                                      <td className="px-6 py-4 text-gray-500">{new Date(e.date).toLocaleDateString()}</td>
+                                      <td className="px-6 py-4">
+                                          <div className="font-medium text-gray-900">{e.title}</div>
+                                          <div className="text-xs text-gray-500">{e.description}</div>
+                                      </td>
+                                      <td className="px-6 py-4">{e.hallId === 'GENERAL' ? 'General/Admin' : halls.find(h => h.id === e.hallId)?.name || e.hallId}</td>
+                                      <td className="px-6 py-4"><span className="px-2 py-1 bg-gray-100 rounded text-xs">{e.category}</span></td>
+                                      <td className="px-6 py-4 text-right font-bold text-red-600">GH₵ {e.amount}</td>
+                                  </tr>
+                              ))
+                          )}
+                      </tbody>
+                  </table>
+              </div>
+          </div>
       )}
 
       {/* --- REPORTS TAB --- */}
@@ -454,23 +550,26 @@ const AdminDashboard = () => {
                       <FileText className="h-5 w-5 text-green-700" />
                       Financial Report: {reportData.targetSemester ? `${reportData.targetSemester.academicYear} - Sem ${reportData.targetSemester.semesterNumber}` : 'Custom Selection'}
                   </h2>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
                        <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
                            <p className="text-xs font-semibold text-gray-500 uppercase">Expected Revenue</p>
                            <p className="text-2xl font-bold text-gray-800">GH₵ {reportData.expectedRevenue}</p>
                            <p className="text-xs text-gray-400">Based on {reportData.studentCount} eligible students</p>
                        </div>
                        <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                           <p className="text-xs font-semibold text-green-600 uppercase">Actual Collected</p>
+                           <p className="text-xs font-semibold text-green-600 uppercase">Actual Income</p>
                            <p className="text-2xl font-bold text-green-800">GH₵ {reportData.actualRevenue}</p>
                            <div className="w-full bg-green-200 h-1.5 rounded-full mt-2">
                                <div className="bg-green-600 h-1.5 rounded-full" style={{ width: reportData.expectedRevenue > 0 ? `${(reportData.actualRevenue / reportData.expectedRevenue) * 100}%` : '0%' }}></div>
                            </div>
                        </div>
                        <div className="p-4 bg-red-50 rounded-lg border border-red-200">
-                           <p className="text-xs font-semibold text-red-600 uppercase">Outstanding Defaulters</p>
-                           <p className="text-2xl font-bold text-red-800">{reportData.defaulters.length}</p>
-                           <p className="text-xs text-red-400">Students yet to pay</p>
+                           <p className="text-xs font-semibold text-red-600 uppercase">Total Expenses</p>
+                           <p className="text-2xl font-bold text-red-800">GH₵ {reportData.totalExpensesAmount}</p>
+                       </div>
+                       <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                           <p className="text-xs font-semibold text-blue-600 uppercase">Net Balance</p>
+                           <p className={`text-2xl font-bold ${reportData.netBalance >= 0 ? 'text-blue-800' : 'text-red-800'}`}>GH₵ {reportData.netBalance}</p>
                        </div>
                   </div>
               </div>
@@ -716,6 +815,49 @@ const AdminDashboard = () => {
                 </form>
              </div>
         </div>
+      )}
+
+      {/* --- ADD EXPENSE MODAL --- */}
+      {showExpModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+                  <div className="flex justify-between mb-4"><h3 className="font-bold">Record General Expense</h3><button onClick={() => setShowExpModal(false)}><X className="h-5 w-5"/></button></div>
+                  <form onSubmit={handleAddExpense} className="space-y-4">
+                      <div>
+                          <label className="text-xs font-bold text-gray-500">Title</label>
+                          <input required type="text" value={newExp.title} onChange={e => setNewExp({...newExp, title: e.target.value})} className="w-full border p-2 rounded" placeholder="e.g. Server Maintenance"/>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-xs font-bold text-gray-500">Amount (GH₵)</label>
+                          <input required type="number" value={newExp.amount} onChange={e => setNewExp({...newExp, amount: Number(e.target.value)})} className="w-full border p-2 rounded"/>
+                        </div>
+                        <div>
+                          <label className="text-xs font-bold text-gray-500">Category</label>
+                          <select value={newExp.category} onChange={e => setNewExp({...newExp, category: e.target.value})} className="w-full border p-2 rounded">
+                              <option value="Maintenance">Maintenance</option>
+                              <option value="Utilities">Utilities</option>
+                              <option value="Events">Events</option>
+                              <option value="Supplies">Supplies</option>
+                              <option value="Other">Other</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div>
+                          <label className="text-xs font-bold text-gray-500">Hall Allocation</label>
+                          <select value={newExp.hallId} onChange={e => setNewExp({...newExp, hallId: e.target.value})} className="w-full border p-2 rounded">
+                              <option value="GENERAL">General / Admin</option>
+                              {halls.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+                          </select>
+                      </div>
+                      <div>
+                          <label className="text-xs font-bold text-gray-500">Description</label>
+                          <textarea value={newExp.description} onChange={e => setNewExp({...newExp, description: e.target.value})} className="w-full border p-2 rounded h-20" placeholder="Details..."/>
+                      </div>
+                      <button type="submit" disabled={loading} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 rounded">Record Expense</button>
+                  </form>
+              </div>
+          </div>
       )}
 
       {/* --- EDIT MODAL --- */}

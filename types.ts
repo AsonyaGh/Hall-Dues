@@ -77,6 +77,17 @@ export interface Payment {
   recordedBy: string; 
 }
 
+export interface Expense {
+  id: string;
+  hallId: string; // 'GENERAL' or specific Hall ID
+  title: string;
+  amount: number;
+  category: string;
+  description: string;
+  date: string;
+  recordedBy: string;
+}
+
 export interface Complaint {
   id: string;
   studentId: string;
