@@ -193,7 +193,8 @@ export const registerUserWithPassword = async (user: User, password: string) => 
         const uid = userCredential.user.uid;
 
         // 3. Save User Profile in Firestore (Main App)
-        const userData = { ...user, id: uid };
+        // sanitize: remove undefined values which setDoc hates
+        const userData = JSON.parse(JSON.stringify({ ...user, id: uid }));
         await setDoc(doc(db, USERS_COL, user.email), userData);
         
         // 4. Cleanup

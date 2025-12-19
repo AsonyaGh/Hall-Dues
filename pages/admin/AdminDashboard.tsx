@@ -34,7 +34,7 @@ const AdminDashboard = () => {
   
   // Create User Form
   const [newUser, setNewUser] = useState<Partial<User>>({
-      firstName: '', lastName: '', email: '', studentId: '', program: 'NAC'
+      firstName: '', lastName: '', email: '', studentId: '', program: 'NAC', hallId: ''
   });
   const [newUserPassword, setNewUserPassword] = useState('password123'); // Default
 
@@ -188,23 +188,31 @@ const AdminDashboard = () => {
       e.preventDefault();
       setLoading(true);
       try {
-          const userToCreate = {
+          // Construct base user object without potential undefined student fields
+          let userToCreate: User = {
               id: '', // Auth will assign
               firstName: newUser.firstName!,
               lastName: newUser.lastName!,
               email: newUser.email!,
               role: createType === 'MASTER' ? UserRole.HALL_MASTER : UserRole.STUDENT,
               hallId: newUser.hallId,
-              studentId: createType === 'STUDENT' ? newUser.studentId : undefined,
-              program: createType === 'STUDENT' ? newUser.program : undefined,
-              batchId: createType === 'STUDENT' ? newUser.batchId : undefined
-          } as User;
+          };
+
+          // Only add student fields if creating a student
+          if (createType === 'STUDENT') {
+              userToCreate = {
+                  ...userToCreate,
+                  studentId: newUser.studentId,
+                  program: newUser.program,
+                  batchId: newUser.batchId
+              };
+          }
 
           await registerUserWithPassword(userToCreate, newUserPassword);
           
           alert(`User created successfully with password: ${newUserPassword}`);
           setShowCreateUser(false);
-          setNewUser({ firstName: '', lastName: '', email: '', studentId: '', program: 'NAC' });
+          setNewUser({ firstName: '', lastName: '', email: '', studentId: '', program: 'NAC', hallId: '' });
           setNewUserPassword('password123');
           await loadData();
       } catch (err: any) {
