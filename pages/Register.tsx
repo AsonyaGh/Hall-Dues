@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { GraduationCap, Lock, Mail, User as UserIcon, AlertTriangle, Loader2 } from 'lucide-react';
 import { doc, setDoc } from 'firebase/firestore';
-import * as firebaseAuth from 'firebase/auth';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth, db } from '../services/firebase';
 import { UserRole, Program, User } from '../types';
 import { getBatches, getHalls } from '../services/storageService';
@@ -45,7 +45,7 @@ const Register = () => {
 
     try {
       // 1. Create Auth User
-      const userCredential = await firebaseAuth.createUserWithEmailAndPassword(auth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const uid = userCredential.user!.uid;
 
       // 2. Determine Role

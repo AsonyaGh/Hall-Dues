@@ -4,11 +4,11 @@ import { useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { 
     getHalls, getBatches, getUsers, getPayments, saveBatch, updateUser, getSettings, 
-    registerUserWithPassword, getPrograms, addProgram, setupNewSemester, getSemesters, getActiveSemester, adminSendPasswordReset 
+    registerUserWithPassword, getPrograms, addProgram, setupNewSemester, getSemesters, getActiveSemester, adminSendPasswordReset, deleteUserProfile
 } from '../../services/storageService';
 import { Batch, UserRole, Hall, User, Payment, SystemSettings, AcademicProgram, Semester, Program } from '../../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Users, GraduationCap, Wallet, Building2, Plus, Loader2, Search, Edit2, Shield, ShieldAlert, UserX, CheckCircle, AlertTriangle, X, UserCog, Calendar, BookOpen, Clock, Lock, Key, Download, FileText, Filter } from 'lucide-react';
+import { Users, GraduationCap, Wallet, Building2, Plus, Loader2, Search, Edit2, Shield, ShieldAlert, UserX, CheckCircle, AlertTriangle, X, UserCog, Calendar, BookOpen, Clock, Lock, Key, Download, FileText, Filter, Trash2 } from 'lucide-react';
 
 const AdminDashboard = () => {
   const { user: currentUser } = useAuth();
@@ -141,6 +141,20 @@ const AdminDashboard = () => {
     setLoading(true);
     await updateUser(updated);
     await loadData();
+  };
+
+  const handleDeleteUser = async (user: User) => {
+      if (!window.confirm(`Are you sure you want to PERMANENTLY DELETE ${user.firstName} ${user.lastName} (${user.email})? This action cannot be undone.`)) return;
+      
+      setLoading(true);
+      try {
+          await deleteUserProfile(user.email);
+          await loadData();
+      } catch (e: any) {
+          alert("Error deleting user: " + e.message);
+      } finally {
+          setLoading(false);
+      }
   };
 
   const saveUserEdit = async (e: React.FormEvent) => {
@@ -612,6 +626,7 @@ const AdminDashboard = () => {
                             <td className="px-6 py-4 text-center">
                                 <button onClick={() => setEditingUser(student)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"><Edit2 className="h-4 w-4" /></button>
                                 <button onClick={() => handleDismiss(student)} className={`p-1.5 rounded ${student.isDismissed ? 'text-green-600' : 'text-red-600'}`}>{student.isDismissed ? <CheckCircle className="h-4 w-4"/> : <UserX className="h-4 w-4" />}</button>
+                                <button onClick={() => handleDeleteUser(student)} className="p-1.5 text-red-600 hover:bg-red-50 rounded ml-1" title="Delete User"><Trash2 className="h-4 w-4" /></button>
                             </td>
                         </tr>
                     ))}
@@ -633,7 +648,7 @@ const AdminDashboard = () => {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left">
                     <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
-                    <tr><th className="px-6 py-3">Name</th><th className="px-6 py-3">Email</th><th className="px-6 py-3">Hall</th><th className="px-6 py-3 text-center">Edit</th></tr>
+                    <tr><th className="px-6 py-3">Name</th><th className="px-6 py-3">Email</th><th className="px-6 py-3">Hall</th><th className="px-6 py-3 text-center">Actions</th></tr>
                     </thead>
                     <tbody>
                     {getFilteredUsers('MASTER').map((master) => (
@@ -641,7 +656,10 @@ const AdminDashboard = () => {
                             <td className="px-6 py-4 font-medium">{master.firstName} {master.lastName}</td>
                             <td className="px-6 py-4">{master.email}</td>
                             <td className="px-6 py-4">{halls.find(h => h.id === master.hallId)?.name || 'Unassigned'}</td>
-                            <td className="px-6 py-4 text-center"><button onClick={() => setEditingUser(master)} className="p-1.5 text-blue-600"><Edit2 className="h-4 w-4" /></button></td>
+                            <td className="px-6 py-4 text-center">
+                                <button onClick={() => setEditingUser(master)} className="p-1.5 text-blue-600"><Edit2 className="h-4 w-4" /></button>
+                                <button onClick={() => handleDeleteUser(master)} className="p-1.5 text-red-600 hover:bg-red-50 rounded ml-1" title="Delete User"><Trash2 className="h-4 w-4" /></button>
+                            </td>
                         </tr>
                     ))}
                     </tbody>

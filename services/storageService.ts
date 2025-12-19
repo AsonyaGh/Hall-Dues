@@ -7,10 +7,11 @@ import {
   updateDoc, 
   addDoc, 
   getDoc,
-  writeBatch
+  writeBatch,
+  deleteDoc
 } from 'firebase/firestore';
 import { initializeApp, deleteApp } from 'firebase/app';
-import * as firebaseAuth from 'firebase/auth';
+import { getAuth, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail } from 'firebase/auth';
 import { db, auth, firebaseConfig } from './firebase';
 import { User, Hall, Batch, Payment, Complaint, SystemSettings, UserRole, ComplaintStatus, Semester, AcademicProgram } from '../types';
 import { INITIAL_HALLS, INITIAL_BATCHES, DEFAULT_DUES, DEMO_USERS } from '../constants';
@@ -173,15 +174,19 @@ export const updateUser = async (user: User) => {
     await updateDoc(docRef, data);
 };
 
+export const deleteUserProfile = async (email: string) => {
+  await deleteDoc(doc(db, USERS_COL, email));
+};
+
 // REAL USER CREATION (Modular SDK)
 export const registerUserWithPassword = async (user: User, password: string) => {
     // 1. Initialize secondary app
     const secondaryApp = initializeApp(firebaseConfig, "SecondaryApp");
-    const secondaryAuth = firebaseAuth.getAuth(secondaryApp);
+    const secondaryAuth = getAuth(secondaryApp);
 
     try {
         // 2. Create User in Auth
-        const userCredential = await firebaseAuth.createUserWithEmailAndPassword(secondaryAuth, user.email, password);
+        const userCredential = await createUserWithEmailAndPassword(secondaryAuth, user.email, password);
         const uid = userCredential.user.uid;
 
         // 3. Save User Profile in Firestore (Main App)
@@ -189,7 +194,7 @@ export const registerUserWithPassword = async (user: User, password: string) => 
         await setDoc(doc(db, USERS_COL, user.email), userData);
         
         // 4. Cleanup
-        await firebaseAuth.signOut(secondaryAuth);
+        await signOut(secondaryAuth);
         await deleteApp(secondaryApp);
         
         return userData;
@@ -208,7 +213,7 @@ export const createUserProfile = async (user: User) => {
 // REAL PASSWORD RESET (via Email)
 export const adminSendPasswordReset = async (email: string) => {
     try {
-        await firebaseAuth.sendPasswordResetEmail(auth, email);
+        await sendPasswordResetEmail(auth, email);
         return true;
     } catch (error) {
         throw error;
