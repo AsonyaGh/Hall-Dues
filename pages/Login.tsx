@@ -2,9 +2,11 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { GraduationCap, Lock, Mail, AlertTriangle } from 'lucide-react';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import * as firebaseAuth from 'firebase/auth';
 import { auth } from '../services/firebase';
 import { DEMO_USERS } from '../constants';
+
+const { signInWithEmailAndPassword } = firebaseAuth as any;
 
 const Login = () => {
   const navigate = useNavigate();

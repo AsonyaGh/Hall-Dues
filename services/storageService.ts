@@ -11,10 +11,12 @@ import {
   deleteDoc
 } from 'firebase/firestore';
 import { initializeApp, deleteApp } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail } from 'firebase/auth';
+import * as firebaseAuth from 'firebase/auth';
 import { db, auth, firebaseConfig } from './firebase';
 import { User, Hall, Batch, Payment, Complaint, SystemSettings, UserRole, ComplaintStatus, Semester, AcademicProgram } from '../types';
 import { INITIAL_HALLS, INITIAL_BATCHES, DEFAULT_DUES, DEMO_USERS } from '../constants';
+
+const { getAuth, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail } = firebaseAuth as any;
 
 // Collection References
 const USERS_COL = 'users';

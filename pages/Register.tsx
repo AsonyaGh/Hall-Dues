@@ -3,10 +3,12 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { GraduationCap, Lock, Mail, User as UserIcon, AlertTriangle, Loader2 } from 'lucide-react';
 import { doc, setDoc } from 'firebase/firestore';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import * as firebaseAuth from 'firebase/auth';
 import { auth, db } from '../services/firebase';
 import { UserRole, Program, User } from '../types';
 import { getBatches, getHalls } from '../services/storageService';
+
+const { createUserWithEmailAndPassword } = firebaseAuth as any;
 
 const Register = () => {
   const navigate = useNavigate();

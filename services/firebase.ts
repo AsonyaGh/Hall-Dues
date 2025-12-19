@@ -1,6 +1,6 @@
 
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import * as firebaseAuth from "firebase/auth";
 import { 
   initializeFirestore, 
   persistentLocalCache,
@@ -19,6 +19,8 @@ export const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
+const { getAuth } = firebaseAuth as any;
+
 export const auth = getAuth(app);
 
 // Initialize Firestore with offline persistence enabled
