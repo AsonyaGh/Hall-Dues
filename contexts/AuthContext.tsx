@@ -1,4 +1,6 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import * as firebaseAuth from 'firebase/auth';
 import { User, UserRole } from '../types';
 import { auth } from '../services/firebase';
 import { getUserProfile, initializeData } from '../services/storageService';
@@ -20,7 +22,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Try to seed data on first app load (if admin exists)
     initializeData().catch(console.error);
 
-    const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
+    const unsubscribe = firebaseAuth.onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser && firebaseUser.email) {
         // Fetch extended profile from Firestore
         // Note: For this demo, we assume the Firestore document ID is the email or the document has the email field
@@ -70,7 +72,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
-    await auth.signOut();
+    await firebaseAuth.signOut(auth);
     setUser(null);
   };
 

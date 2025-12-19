@@ -1,6 +1,6 @@
 
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import * as firebaseAuth from "firebase/auth";
 import { 
   initializeFirestore, 
   persistentLocalCache,
@@ -19,7 +19,7 @@ export const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
+export const auth = firebaseAuth.getAuth(app);
 
 // Initialize Firestore with offline persistence enabled
 // This prevents "Backend didn't respond within 10 seconds" errors by serving local data immediately

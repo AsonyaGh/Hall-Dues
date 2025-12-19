@@ -10,7 +10,7 @@ import {
   writeBatch
 } from 'firebase/firestore';
 import { initializeApp, deleteApp } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail } from 'firebase/auth';
+import * as firebaseAuth from 'firebase/auth';
 import { db, auth, firebaseConfig } from './firebase';
 import { User, Hall, Batch, Payment, Complaint, SystemSettings, UserRole, ComplaintStatus, Semester, AcademicProgram } from '../types';
 import { INITIAL_HALLS, INITIAL_BATCHES, DEFAULT_DUES, DEMO_USERS } from '../constants';
@@ -177,11 +177,11 @@ export const updateUser = async (user: User) => {
 export const registerUserWithPassword = async (user: User, password: string) => {
     // 1. Initialize secondary app
     const secondaryApp = initializeApp(firebaseConfig, "SecondaryApp");
-    const secondaryAuth = getAuth(secondaryApp);
+    const secondaryAuth = firebaseAuth.getAuth(secondaryApp);
 
     try {
         // 2. Create User in Auth
-        const userCredential = await createUserWithEmailAndPassword(secondaryAuth, user.email, password);
+        const userCredential = await firebaseAuth.createUserWithEmailAndPassword(secondaryAuth, user.email, password);
         const uid = userCredential.user.uid;
 
         // 3. Save User Profile in Firestore (Main App)
@@ -189,7 +189,7 @@ export const registerUserWithPassword = async (user: User, password: string) => 
         await setDoc(doc(db, USERS_COL, user.email), userData);
         
         // 4. Cleanup
-        await signOut(secondaryAuth);
+        await firebaseAuth.signOut(secondaryAuth);
         await deleteApp(secondaryApp);
         
         return userData;
@@ -208,7 +208,7 @@ export const createUserProfile = async (user: User) => {
 // REAL PASSWORD RESET (via Email)
 export const adminSendPasswordReset = async (email: string) => {
     try {
-        await sendPasswordResetEmail(auth, email);
+        await firebaseAuth.sendPasswordResetEmail(auth, email);
         return true;
     } catch (error) {
         throw error;
