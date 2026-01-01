@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { 
     getHallStats, getPayments, getComplaints, updateComplaintStatus, addPayment, getHalls, 
@@ -10,6 +11,7 @@ import { Wallet, FileText, CheckCircle, Clock, Loader2, Users, Receipt, Plus, Se
 
 const HallDashboard = () => {
   const { user } = useAuth();
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState<'overview' | 'students' | 'payments' | 'expenses' | 'complaints'>('overview');
   const [loading, setLoading] = useState(true);
   
@@ -38,6 +40,15 @@ const HallDashboard = () => {
   // Student Management State
   const [searchTerm, setSearchTerm] = useState('');
   const [editingStudent, setEditingStudent] = useState<User | null>(null);
+
+  // Sync Tab with URL
+  useEffect(() => {
+    if (location.pathname.includes('/hall/students')) setActiveTab('students');
+    else if (location.pathname.includes('/hall/payments')) setActiveTab('payments');
+    else if (location.pathname.includes('/hall/complaints')) setActiveTab('complaints');
+    else if (location.pathname.includes('/hall/expenses')) setActiveTab('expenses');
+    else setActiveTab('overview');
+  }, [location]);
 
   const refreshData = async () => {
     if (!user || !user.hallId) return;
