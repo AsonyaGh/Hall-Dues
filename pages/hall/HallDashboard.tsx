@@ -175,9 +175,10 @@ const HallDashboard = () => {
   const totalIncome = hallStats?.totalCollected || 0;
   const balance = totalIncome - totalExpenses;
 
+  // SAFE FILTERING: Added checks (|| '') to ensure we don't call toLowerCase on undefined
   const filteredStudents = students.filter(s => 
-      s.firstName.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      s.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (s.firstName || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+      (s.lastName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (s.studentId || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
   

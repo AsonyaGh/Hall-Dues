@@ -124,15 +124,3 @@ export interface DashboardStats {
   pendingComplaints: number;
   paidPercentage: number;
 }
-
-// Fix for missing react-router-dom types in environment
-declare module 'react-router-dom' {
-    export const Link: any;
-    export const useLocation: any;
-    export const useNavigate: any;
-    export const BrowserRouter: any;
-    export const Routes: any;
-    export const Route: any;
-    export const Navigate: any;
-    export const Outlet: any;
-}
