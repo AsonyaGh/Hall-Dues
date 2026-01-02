@@ -7,6 +7,7 @@ import {
   Landmark, 
   Wallet, 
   FileText, 
+  Settings, 
   LogOut,
   GraduationCap,
   UserCog,

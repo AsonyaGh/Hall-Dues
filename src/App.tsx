@@ -13,6 +13,14 @@ import ProgramsList from './pages/ProgramsList';
 import Announcements from './pages/Announcements';
 import { Loader2, AlertTriangle } from 'lucide-react';
 
+// Placeholder components for routes not fully detailed in this snippet
+const Placeholder = ({ title }: { title: string }) => (
+    <div className="p-4 text-center text-gray-500">
+        <h2 className="text-xl font-bold">{title}</h2>
+        <p>This module is under construction.</p>
+    </div>
+);
+
 const NotFound = () => (
     <div className="flex flex-col items-center justify-center h-[60vh] text-center p-4">
         <AlertTriangle className="h-16 w-16 text-yellow-500 mb-4" />

@@ -4,7 +4,8 @@ import * as firebaseAuth from "firebase/auth";
 import { 
   initializeFirestore, 
   persistentLocalCache,
-  persistentMultipleTabManager
+  persistentMultipleTabManager,
+  getFirestore
 } from "firebase/firestore";
 
 // TODO: REPLACE WITH YOUR FIREBASE PROJECT CONFIG
@@ -23,10 +24,17 @@ const { getAuth } = firebaseAuth as any;
 
 export const auth = getAuth(app);
 
-// Initialize Firestore with offline persistence enabled
-// This prevents "Backend didn't respond within 10 seconds" errors by serving local data immediately
-export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({
-    tabManager: persistentMultipleTabManager()
-  })
-});
+// Initialize Firestore with fallback
+let firestoreDb;
+try {
+  firestoreDb = initializeFirestore(app, {
+    localCache: persistentLocalCache({
+      tabManager: persistentMultipleTabManager()
+    })
+  });
+} catch (err) {
+  console.warn("Firestore persistence failed (likely incognito or restricted environment). Falling back to default memory cache.", err);
+  firestoreDb = getFirestore(app);
+}
+
+export const db = firestoreDb;
